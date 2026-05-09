@@ -29,13 +29,26 @@ import {
   IconFlag,
 } from "./_components/icons";
 
-type View = "home" | "dashboard" | "capture" | "ask" | "replay";
-type NavFn = (v: View) => void;
+type View =
+  | "home"
+  | "dashboard"
+  | "capture"
+  | "ask"
+  | "replay"
+  | "wins"
+  | "win-summary";
+type NavFn = (v: View, winId?: string) => void;
 
 export default function Page() {
   const [view, setView] = React.useState<View>("home");
+  const [selectedWinId, setSelectedWinId] = React.useState<string | null>(null);
 
-  const navigate = (v: View) => {
+  const navigate = (v: View, winId?: string) => {
+    if (v === "win-summary") {
+      if (winId) setSelectedWinId(winId);
+    } else if (v !== "wins") {
+      setSelectedWinId(null);
+    }
     setView(v);
     if (typeof window !== "undefined")
       window.scrollTo({ top: 0, behavior: "instant" });
@@ -47,10 +60,13 @@ export default function Page() {
   if (view === "capture") body = <Capture navigate={navigate} />;
   if (view === "ask") body = <Ask />;
   if (view === "replay") body = <Replay navigate={navigate} />;
+  if (view === "wins") body = <AllWins navigate={navigate} />;
+  if (view === "win-summary" && selectedWinId)
+    body = <WinSummary winId={selectedWinId} navigate={navigate} />;
 
   return (
     <Shell view={view} navigate={navigate}>
-      <div key={view} className="anim-in">
+      <div key={view + (selectedWinId ?? "")} className="anim-in">
         {body}
       </div>
     </Shell>
@@ -75,11 +91,14 @@ function Shell({
   const items: { id: View; label: string; icon: React.ReactNode }[] = [
     { id: "home", label: "Home", icon: <IconHome size={16} /> },
     { id: "dashboard", label: "Dashboard", icon: <IconGrid size={16} /> },
+    { id: "wins", label: "All Wins", icon: <IconStar size={16} /> },
     { id: "capture", label: "Capture a Win", icon: <IconPlus size={16} /> },
     { id: "ask", label: "Ask Gordian", icon: <IconChat size={16} /> },
     { id: "replay", label: "Decision Replay", icon: <IconReplay size={16} /> },
   ];
-  const activeLabel = items.find((i) => i.id === view)?.label || "Home";
+  const matchView: View = view === "win-summary" ? "wins" : view;
+  const activeLabel =
+    items.find((i) => i.id === matchView)?.label || "Home";
 
   return (
     <div className="min-h-screen flex">
@@ -131,7 +150,7 @@ function Shell({
           {items.map((it) => (
             <button
               key={it.id}
-              className={`nav-item ${view === it.id ? "active" : ""}`}
+              className={`nav-item ${matchView === it.id ? "active" : ""}`}
               onClick={() => {
                 navigate(it.id);
                 setMobileOpen(false);
@@ -185,7 +204,7 @@ function Shell({
             <div className="flex-1" />
             <div className="hidden sm:flex items-center gap-2 px-3 h-9 rounded-lg bg-white border border-slate2-100 w-72 max-w-full text-sm text-slate2-400">
               <IconSearch size={14} />
-              <span className="flex-1">Search wins, playbooks, people…</span>
+              <span className="flex-1">Search</span>
               <span className="kbd">⌘K</span>
             </div>
             <button className="btn-ghost h-9 px-3">
@@ -509,39 +528,19 @@ function DecisionDNAPreview() {
 // =====================================================================
 
 function Dashboard({ navigate }: { navigate: NavFn }) {
+  const { wins, loading } = useWinsList();
+  const recentWins = wins.slice(0, 3);
   const stats = [
-    { k: "Total Wins Captured", v: "12", d: "+3 this month", icon: <IconStar size={16} />, trend: "+33%" },
+    {
+      k: "Total Wins Captured",
+      v: String(wins.length),
+      d: wins.length === 0 ? "Capture your first" : "Stored locally",
+      icon: <IconStar size={16} />,
+      trend: wins.length > 0 ? `+${wins.length}` : "—",
+    },
     { k: "Repeatable Playbooks", v: "8", d: "Across 4 teams", icon: <IconDoc size={16} />, trend: "+2" },
     { k: "Team Questions Answered", v: "47", d: "Past 30 days", icon: <IconChat size={16} />, trend: "+18" },
     { k: "Decision Confidence Increase", v: "32%", d: "Self-reported", icon: <IconTrend size={16} />, trend: "↑" },
-  ];
-
-  const wins = [
-    {
-      id: "WIN-012",
-      t: "Client Recovery Through Fast Alignment",
-      desc: "Aligned the internal team before responding externally to recover a major at-risk account.",
-      tags: ["Client Success", "Leadership"],
-      author: "Maya Okafor",
-      ago: "2d ago",
-      featured: true,
-    },
-    {
-      id: "WIN-011",
-      t: "Improving Team Handoff Process",
-      desc: "Designed a 3-step handoff ritual that cut dropped tasks across engineering and ops.",
-      tags: ["Operations"],
-      author: "Daniel Reyes",
-      ago: "5d ago",
-    },
-    {
-      id: "WIN-010",
-      t: "Closing a High-Value Partnership",
-      desc: "Reframed a stalled partnership conversation around mutual upside and closed in 2 weeks.",
-      tags: ["Sales", "Leadership"],
-      author: "Priya Anand",
-      ago: "1w ago",
-    },
   ];
 
   return (
@@ -610,57 +609,19 @@ function Dashboard({ navigate }: { navigate: NavFn }) {
                 Captured by leaders across the org
               </p>
             </div>
-            <button className="text-xs text-slate2-500 hover:text-navy-900 flex items-center gap-1">
+            <button
+              className="text-xs text-slate2-500 hover:text-navy-900 flex items-center gap-1"
+              onClick={() => navigate("wins")}
+            >
               View all <IconChevR size={12} />
             </button>
           </div>
-          <ul>
-            {wins.map((w) => (
-              <li
-                key={w.id}
-                className="px-5 py-4 border-t border-slate2-100 first:border-t-0 hover:bg-ivory/60 transition-colors cursor-pointer group"
-                onClick={() => navigate("capture")}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-navy-900 text-paper flex items-center justify-center shrink-0 mt-0.5">
-                    <IconKnot size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[10px] text-slate2-400">
-                        {w.id}
-                      </span>
-                      {w.featured && (
-                        <span className="chip chip-gold text-[10px]">
-                          <IconStar size={10} /> Featured
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-navy-900 font-medium mt-1 group-hover:text-gold-700 transition-colors">
-                      {w.t}
-                    </h3>
-                    <p className="text-sm text-slate2-500 mt-1 leading-relaxed">
-                      {w.desc}
-                    </p>
-                    <div className="flex items-center gap-2 mt-3 flex-wrap">
-                      {w.tags.map((t) => (
-                        <span key={t} className="chip">
-                          {t}
-                        </span>
-                      ))}
-                      <span className="text-xs text-slate2-400 ml-auto">
-                        {w.author} · {w.ago}
-                      </span>
-                    </div>
-                  </div>
-                  <IconChevR
-                    size={16}
-                    className="text-slate2-300 mt-2 shrink-0 group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all"
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
+          <WinList
+            wins={recentWins}
+            loading={loading}
+            onSelect={(id) => navigate("win-summary", id)}
+            emptyMessage="No wins captured yet — capture your first win to see it here."
+          />
         </div>
 
         <div className="space-y-4">
@@ -715,6 +676,582 @@ function Dashboard({ navigate }: { navigate: NavFn }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Wins (shared list + AllWins page + WinSummary page)
+// =====================================================================
+
+type StoredSdj = { save: string; delete: string; join: string };
+
+type StoredWin = {
+  id: string;
+  name: string;
+  createdAt: string;
+  author: string;
+  tags: string[];
+  description: string;
+  featured: boolean;
+  answers: { winName: string } & Record<SectionId, string[]>;
+  answerTitles?: Record<SectionId, string[]>;
+  playbook: {
+    name: string;
+    summaries: Record<SectionId, string[]>;
+    repeatableRule: string;
+    suggestedNextWin: string;
+    sdj: StoredSdj;
+  };
+  aiSummary?: { sdj: StoredSdj; generatedAt: string; model?: string };
+};
+
+function deriveTitle(body: string, max = 6): string {
+  const clean = (body || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "Untitled";
+  const words = clean.split(" ");
+  if (words.length <= max) return clean.replace(/[.!?,;:]+$/, "");
+  return words.slice(0, max).join(" ").replace(/[.!?,;:]+$/, "") + "…";
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const diffMs = Date.now() - then;
+  const sec = Math.max(1, Math.round(diffMs / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const wk = Math.round(day / 7);
+  if (wk < 5) return `${wk}w ago`;
+  const mo = Math.round(day / 30);
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.round(day / 365)}y ago`;
+}
+
+function useWinsList() {
+  const [wins, setWins] = React.useState<StoredWin[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/wins", { cache: "no-store" });
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const data = (await res.json()) as StoredWin[];
+        if (alive) setWins(data);
+      } catch (err) {
+        if (alive) setError(err instanceof Error ? err.message : "Failed");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return { wins, loading, error };
+}
+
+function WinList({
+  wins,
+  loading,
+  onSelect,
+  emptyMessage,
+}: {
+  wins: StoredWin[];
+  loading: boolean;
+  onSelect: (id: string) => void;
+  emptyMessage: string;
+}) {
+  if (loading) {
+    return (
+      <ul>
+        {[0, 1, 2].map((i) => (
+          <li
+            key={i}
+            className="px-5 py-4 border-t border-slate2-100 first:border-t-0"
+          >
+            <div className="flex items-start gap-4 animate-pulse">
+              <div className="w-9 h-9 rounded-lg bg-slate2-100 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-20 bg-slate2-100 rounded" />
+                <div className="h-4 w-2/3 bg-slate2-100 rounded" />
+                <div className="h-3 w-full bg-slate2-100 rounded" />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (wins.length === 0) {
+    return (
+      <div className="px-5 py-10 text-center text-sm text-slate2-500">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <ul>
+      {wins.map((w) => (
+        <li
+          key={w.id}
+          className="px-5 py-4 border-t border-slate2-100 first:border-t-0 hover:bg-ivory/60 transition-colors cursor-pointer group"
+          onClick={() => onSelect(w.id)}
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-9 h-9 rounded-lg bg-navy-900 text-paper flex items-center justify-center shrink-0 mt-0.5">
+              <IconKnot size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-[10px] text-slate2-400">
+                  {w.id}
+                </span>
+                {w.featured && (
+                  <span className="chip chip-gold text-[10px]">
+                    <IconStar size={10} /> Featured
+                  </span>
+                )}
+              </div>
+              <h3 className="text-navy-900 font-medium mt-1 group-hover:text-gold-700 transition-colors">
+                {w.name}
+              </h3>
+              {w.description && (
+                <p className="text-sm text-slate2-500 mt-1 leading-relaxed">
+                  {w.description}
+                </p>
+              )}
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                {w.tags.map((t) => (
+                  <span key={t} className="chip">
+                    {t}
+                  </span>
+                ))}
+                <span className="text-xs text-slate2-400 ml-auto">
+                  {w.author} · {relativeTime(w.createdAt)}
+                </span>
+              </div>
+            </div>
+            <IconChevR
+              size={16}
+              className="text-slate2-300 mt-2 shrink-0 group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all"
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AllWins({ navigate }: { navigate: NavFn }) {
+  const { wins, loading } = useWinsList();
+  return (
+    <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1">
+            Workspace · Aurora Systems
+          </div>
+          <h1 className="font-serif text-4xl text-navy-900 leading-tight">
+            All Wins
+          </h1>
+          <p className="text-slate2-500 mt-1 text-sm">
+            Every win captured through the Executive Winning System.
+          </p>
+        </div>
+        <div className="flex gap-2.5">
+          <button
+            className="btn-ghost"
+            style={{ padding: "13px 22px", fontSize: 15 }}
+            onClick={() => navigate("dashboard")}
+          >
+            <IconGrid size={16} /> Dashboard
+          </button>
+          <button
+            className="btn-gold"
+            style={{ padding: "13px 22px", fontSize: 15 }}
+            onClick={() => navigate("capture")}
+          >
+            <IconPlus size={16} /> Capture a Win
+          </button>
+        </div>
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate2-100">
+          <div>
+            <h2 className="font-medium text-navy-900">
+              {loading ? "Loading…" : `${wins.length} win${wins.length === 1 ? "" : "s"}`}
+            </h2>
+            <p className="text-xs text-slate2-400 mt-0.5">
+              Sorted by most recent
+            </p>
+          </div>
+        </div>
+        <WinList
+          wins={wins}
+          loading={loading}
+          onSelect={(id) => navigate("win-summary", id)}
+          emptyMessage="No wins captured yet. Capture your first win to populate this list."
+        />
+      </div>
+    </div>
+  );
+}
+
+function WinSummary({
+  winId,
+  navigate,
+}: {
+  winId: string;
+  navigate: NavFn;
+}) {
+  const [win, setWin] = React.useState<StoredWin | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [notFound, setNotFound] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [activeSdj, setActiveSdj] = React.useState<StoredSdj | null>(null);
+  const [sdjSource, setSdjSource] = React.useState<"ai" | "fallback" | "capture">(
+    "capture",
+  );
+  const [sdjGeneratedAt, setSdjGeneratedAt] = React.useState<string | null>(
+    null,
+  );
+
+  React.useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setNotFound(false);
+    (async () => {
+      try {
+        const res = await fetch(`/api/wins/${winId}`, { cache: "no-store" });
+        if (res.status === 404) {
+          if (alive) setNotFound(true);
+          return;
+        }
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const data = (await res.json()) as StoredWin;
+        if (!alive) return;
+        setWin(data);
+        if (data.aiSummary) {
+          setActiveSdj(data.aiSummary.sdj);
+          setSdjSource("ai");
+          setSdjGeneratedAt(data.aiSummary.generatedAt);
+        } else if (data.playbook) {
+          setActiveSdj(data.playbook.sdj);
+          setSdjSource("capture");
+          setSdjGeneratedAt(data.createdAt);
+        }
+      } catch {
+        if (alive) setNotFound(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [winId]);
+
+  const refresh = async () => {
+    if (refreshing || !win) return;
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/wins/${win.id}/summary`, { method: "POST" });
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const data = (await res.json()) as {
+        sdj: StoredSdj;
+        source: "ai" | "fallback";
+        generatedAt: string;
+      };
+      setActiveSdj(data.sdj);
+      setSdjSource(data.source);
+      setSdjGeneratedAt(data.generatedAt);
+    } catch {
+      // No-op: keep current state.
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+        <div className="card p-8 animate-pulse space-y-3">
+          <div className="h-3 w-24 bg-slate2-100 rounded" />
+          <div className="h-8 w-2/3 bg-slate2-100 rounded" />
+          <div className="h-3 w-1/2 bg-slate2-100 rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound || !win) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+        <div className="card p-10 text-center">
+          <h2 className="font-serif text-2xl text-navy-900">Win not found</h2>
+          <p className="text-sm text-slate2-500 mt-2">
+            This win may have been removed or never saved.
+          </p>
+          <button
+            className="btn-gold mt-5"
+            onClick={() => navigate("wins")}
+          >
+            Back to All Wins
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!win.playbook || !activeSdj) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+        <div className="card p-10 text-center">
+          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-2">
+            {win.id} · Draft
+          </div>
+          <h2 className="font-serif text-2xl text-navy-900">
+            {win.name || "Untitled win"}
+          </h2>
+          <p className="text-sm text-slate2-500 mt-2">
+            This win is still being captured. Finish the guided builder to
+            generate its playbook and feedback.
+          </p>
+          <button
+            className="btn-gold mt-5"
+            onClick={() => navigate("capture")}
+          >
+            Resume capture
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const sections: { id: SectionId; label: string }[] = [
+    { id: "strategy", label: "Strategy" },
+    { id: "workPlan", label: "Work Plan" },
+    { id: "people", label: "People" },
+    { id: "operations", label: "Operations" },
+    { id: "results", label: "Results" },
+  ];
+
+  const sourceCaption =
+    sdjSource === "ai"
+      ? `Generated by Gordian AI · ${
+          sdjGeneratedAt ? relativeTime(sdjGeneratedAt) : "just now"
+        }`
+      : sdjSource === "fallback"
+      ? "AI unavailable — showing capture-time summary"
+      : "Showing capture-time summary";
+
+  return (
+    <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1 flex items-center gap-2">
+            <button
+              className="hover:text-navy-900 flex items-center gap-1"
+              onClick={() => navigate("wins")}
+            >
+              <IconChevR size={10} className="rotate-180" /> All Wins
+            </button>
+            <span className="text-slate2-300">·</span>
+            <span>{win.id}</span>
+          </div>
+          <h1 className="font-serif text-4xl text-navy-900 leading-tight">
+            {win.name}
+          </h1>
+          <p className="text-slate2-500 mt-1 text-sm">
+            {win.author} · captured {relativeTime(win.createdAt)}
+          </p>
+        </div>
+        <div className="flex gap-2.5">
+          <button
+            className="btn-ghost"
+            onClick={() => navigate("capture")}
+          >
+            <IconPlus size={14} /> Capture another
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {sections.map((sec, i) => {
+          const items = win.answers[sec.id] ?? [];
+          const titles = win.answerTitles?.[sec.id] ?? [];
+          const responseCount = items.filter(Boolean).length;
+          return (
+            <details
+              key={sec.id}
+              className="group/section card p-0 overflow-hidden"
+            >
+              <summary className="flex items-center gap-3 px-6 sm:px-7 py-4 cursor-pointer list-none select-none hover:bg-ivory/60 transition-colors">
+                <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-gold-700 shrink-0">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="font-medium text-navy-900">{sec.label}</span>
+                <span className="h-px flex-1 bg-gold-100" />
+                <span className="text-[10px] font-mono text-slate2-400">
+                  {responseCount} response{responseCount === 1 ? "" : "s"}
+                </span>
+                <IconChevR
+                  size={14}
+                  className="text-slate2-400 group-open/section:rotate-90 transition-transform"
+                />
+              </summary>
+
+              <div className="px-6 sm:px-7 pb-6 pt-1">
+                {responseCount === 0 ? (
+                  <div className="text-sm text-slate2-400 italic">
+                    — not captured —
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {items.map((body, j) => {
+                      if (!body) return null;
+                      const title = titles[j]?.trim() || deriveTitle(body);
+                      return (
+                        <li key={j}>
+                          <details className="group/item rounded-lg border border-slate2-100 bg-ivory/40 open:bg-white open:border-slate2-200 transition-colors">
+                            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none">
+                              <span className="font-mono text-[10px] text-slate2-400 w-4">
+                                {String(j + 1).padStart(2, "0")}
+                              </span>
+                              <span className="flex-1 text-sm font-medium text-navy-900">
+                                {title}
+                              </span>
+                              <IconChevR
+                                size={14}
+                                className="text-slate2-400 group-open/item:rotate-90 transition-transform"
+                              />
+                            </summary>
+                            <div className="px-4 pb-4 pt-1 pl-11 text-sm text-slate2-700 leading-relaxed whitespace-pre-line">
+                              {body}
+                            </div>
+                          </details>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </details>
+          );
+        })}
+
+        <div className="card p-6 sm:p-7">
+          <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-2">
+            Repeatable Rule
+          </div>
+          <p className="font-serif italic text-xl text-navy-900 leading-snug">
+            &quot;{win.playbook.repeatableRule}&quot;
+          </p>
+        </div>
+
+        <div className="card p-6 sm:p-8 bg-ivory/50">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-1">
+                Feedback / Recommendations
+              </div>
+              <h2 className="font-serif text-2xl text-navy-900 leading-tight">
+                What to learn from this win
+              </h2>
+              <p className="text-xs text-slate2-500 mt-1">
+                {sourceCaption}
+              </p>
+            </div>
+            <button
+              className="btn-ghost"
+              onClick={refresh}
+              disabled={refreshing}
+            >
+              <IconSparkle size={14} />{" "}
+              {refreshing ? "Refreshing…" : "Refresh summary"}
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate2-100 bg-white">
+            <WsdjRow
+              letter="W"
+              label="Win"
+              tone="navy"
+              text={win.name}
+              hint="Name the win"
+            />
+            <WsdjRow
+              letter="S"
+              label="Save"
+              tone="emerald"
+              text={activeSdj.save}
+              hint="What to save from this win"
+            />
+            <WsdjRow
+              letter="D"
+              label="Delete"
+              tone="red"
+              text={activeSdj.delete}
+              hint="What to delete from this win"
+            />
+            <WsdjRow
+              letter="J"
+              label="Join"
+              tone="gold"
+              text={activeSdj.join}
+              hint="What to combine with other wins"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WsdjRow({
+  letter,
+  label,
+  tone,
+  text,
+  hint,
+}: {
+  letter: string;
+  label: string;
+  tone: "navy" | "emerald" | "red" | "gold";
+  text: string;
+  hint: string;
+}) {
+  const toneCls = {
+    navy: "bg-navy-900 text-paper border-navy-900",
+    emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    red: "bg-red-100 text-red-700 border-red-200",
+    gold: "bg-gold-100 text-gold-700 border-gold-200",
+  }[tone];
+  return (
+    <div className="grid grid-cols-[auto_140px_1fr] gap-4 px-4 sm:px-5 py-4 border-t border-slate2-100 first:border-t-0 items-start">
+      <div
+        className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-mono font-medium border ${toneCls} shrink-0`}
+      >
+        {letter}
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-navy-900">{label}</div>
+        <div className="text-[11px] text-slate2-400 leading-snug">{hint}</div>
+      </div>
+      <div className="text-sm text-slate2-700 leading-relaxed">{text}</div>
     </div>
   );
 }
@@ -1340,18 +1877,26 @@ type Playbook = {
 };
 
 type CaptureChatMode =
-  | "ask_next_question"
+  | "pick_next_question"
+  | "process_user_message"
   | "summarize_section"
   | "generate_playbook";
+
+type CaptureProcessResult =
+  | { kind: "answer"; assistantMessage: string; capturedAnswer: string }
+  | { kind: "side_question"; reply: string };
 
 type CaptureChatRequest = {
   winName: string;
   sectionId: SectionId;
   sectionLabel: string;
   questionIndex: number;
-  currentQuestion: string;
+  questionsPerSection: number;
+  currentQuestion?: string;
   lastAnswer?: string;
+  userMessage?: string;
   answers: Record<SectionId, string[]>;
+  priorQuestions?: Partial<Record<SectionId, string[]>>;
   mode: CaptureChatMode;
 };
 
@@ -1362,7 +1907,11 @@ type CaptureChatResponse = {
   isSectionComplete: boolean;
   isFlowComplete: boolean;
   playbook: Playbook | null;
+  answerTitles?: Record<SectionId, string[]>;
+  process?: CaptureProcessResult;
 };
+
+const QUESTIONS_PER_SECTION = 4;
 
 async function callCaptureChat(
   req: CaptureChatRequest,
@@ -1381,6 +1930,14 @@ async function callCaptureChat(
   return (await res.json()) as CaptureChatResponse;
 }
 
+const EMPTY_SECTION_RECORD = (): Record<SectionId, string[]> => ({
+  strategy: [],
+  workPlan: [],
+  people: [],
+  operations: [],
+  results: [],
+});
+
 function Capture({ navigate }: { navigate: NavFn }) {
   const [winName, setWinName] = React.useState("");
   const [sectionIdx, setSectionIdx] = React.useState(-1);
@@ -1393,15 +1950,39 @@ function Capture({ navigate }: { navigate: NavFn }) {
     operations: [],
     results: [],
   });
+  const [questionsAsked, setQuestionsAsked] = React.useState<
+    Record<SectionId, string[]>
+  >(EMPTY_SECTION_RECORD);
+  const [currentQuestion, setCurrentQuestion] = React.useState<string>("");
   const [messages, setMessages] = React.useState<ChatBubbleMsg[]>([]);
   const [typing, setTyping] = React.useState(false);
   const [input, setInput] = React.useState("");
   const [complete, setComplete] = React.useState(false);
   const [playbook, setPlaybook] = React.useState<Playbook | null>(null);
+  const [savedWinId, setSavedWinId] = React.useState<string | null>(null);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const initRef = React.useRef(false);
+
+  const patchWin = React.useCallback(
+    async (id: string, body: Record<string, unknown>) => {
+      try {
+        const res = await fetch(`/api/wins/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`PATCH failed (${res.status})`);
+      } catch (err) {
+        setSaveError(
+          err instanceof Error ? err.message : "Could not save progress",
+        );
+      }
+    },
+    [],
+  );
 
   const pushBot = React.useCallback(
     async (texts: string[] | string, kind?: BotKind) => {
@@ -1428,6 +2009,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
     pushBot(
       [
         "Welcome to the Guided Win Builder. I'll help you turn one successful outcome into a repeatable playbook using the Executive Winning System.",
+        "I adapt my questions to your win, and you can ask me a quick business question any time — those won't be saved with the win.",
         "First, what would you like to call this win?",
       ],
       "welcome",
@@ -1453,19 +2035,81 @@ function Capture({ navigate }: { navigate: NavFn }) {
     setTyping(false);
   }, []);
 
+  const askNextQuestion = React.useCallback(
+    async (
+      sec: (typeof EWS_SECTIONS)[number],
+      qSlot: number,
+      sectionAnswers: Record<SectionId, string[]>,
+      askedAcrossSections: Record<SectionId, string[]>,
+      latestWinName: string,
+    ): Promise<string> => {
+      try {
+        const res = await callCaptureChat({
+          winName: latestWinName,
+          sectionId: sec.id,
+          sectionLabel: sec.label,
+          questionIndex: qSlot,
+          questionsPerSection: QUESTIONS_PER_SECTION,
+          answers: sectionAnswers,
+          priorQuestions: askedAcrossSections,
+          mode: "pick_next_question",
+        });
+        const q =
+          res.nextQuestion ??
+          res.assistantMessage ??
+          sec.questions[Math.min(qSlot, sec.questions.length - 1)];
+        return q;
+      } catch {
+        return sec.questions[Math.min(qSlot, sec.questions.length - 1)];
+      }
+    },
+    [],
+  );
+
   const submit = async (raw?: string) => {
     const text = (raw ?? input).trim();
     if (!text || typing || complete) return;
     setInput("");
     setMessages((m) => [...m, { role: "user", text }]);
 
+    // Phase 1: capture the win name and start a draft on disk.
     if (sectionIdx === -1) {
       setWinName(text);
-      setAnswers((a) => ({ ...a, winName: text }));
+      const seededAnswers: Answers = { ...answers, winName: text };
+      setAnswers(seededAnswers);
+
+      setTyping(true);
+      // Create a draft so we can PATCH iteratively from here on.
+      try {
+        const res = await fetch("/api/wins", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers: seededAnswers }),
+        });
+        if (!res.ok) throw new Error(`Draft create failed (${res.status})`);
+        const created = (await res.json()) as { id: string };
+        setSavedWinId(created.id);
+        setSaveError(null);
+      } catch (err) {
+        setSaveError(
+          err instanceof Error ? err.message : "Could not start a draft win",
+        );
+      }
+
+      const firstSection = EWS_SECTIONS[0];
+      const firstQ = await askNextQuestion(
+        firstSection,
+        0,
+        EMPTY_SECTION_RECORD(),
+        EMPTY_SECTION_RECORD(),
+        text,
+      );
+      setCurrentQuestion(firstQ);
+
       await pushBot(
         [
           `"${text}" — got it. Let's start with **Strategy**.`,
-          EWS_SECTIONS[0].questions[0],
+          firstQ,
         ],
         "question",
       );
@@ -1475,14 +2119,75 @@ function Capture({ navigate }: { navigate: NavFn }) {
     }
 
     const section = EWS_SECTIONS[sectionIdx];
+    const sectionAnswersBefore: Record<SectionId, string[]> = {
+      strategy: answers.strategy,
+      workPlan: answers.workPlan,
+      people: answers.people,
+      operations: answers.operations,
+      results: answers.results,
+    };
+
+    setTyping(true);
+
+    // Phase 2: classify whether the input is an answer or a side question.
+    let processed: CaptureProcessResult | null = null;
+    try {
+      const res = await callCaptureChat({
+        winName: answers.winName,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        questionIndex: qIdx,
+        questionsPerSection: QUESTIONS_PER_SECTION,
+        currentQuestion,
+        userMessage: text,
+        answers: sectionAnswersBefore,
+        mode: "process_user_message",
+      });
+      processed = res.process ?? null;
+    } catch (err) {
+      handleApiError(err instanceof Error ? err.message : "");
+      return;
+    }
+
+    // Side question — reply, do not store, leave the active question pending.
+    if (processed?.kind === "side_question") {
+      setMessages((m) => [
+        ...m,
+        { role: "bot", text: processed!.reply, kind: "context" },
+        {
+          role: "bot",
+          text: `To recap: ${currentQuestion}`,
+          kind: "question",
+        },
+      ]);
+      setTyping(false);
+      setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
+      return;
+    }
+
+    // Treat as an answer.
+    const captured =
+      processed?.kind === "answer" && processed.capturedAnswer
+        ? processed.capturedAnswer
+        : text;
+    const ack =
+      processed?.kind === "answer" ? processed.assistantMessage : "Captured.";
+
     const newAnswers: Answers = {
       ...answers,
       [section.id]: [...(answers[section.id] || [])],
     };
-    newAnswers[section.id][qIdx] = text;
+    newAnswers[section.id][qIdx] = captured;
     setAnswers(newAnswers);
 
-    const sectionAnswersOnly: Record<SectionId, string[]> = {
+    const newQuestionsAsked: Record<SectionId, string[]> = {
+      ...questionsAsked,
+      [section.id]: [...(questionsAsked[section.id] || [])],
+    };
+    newQuestionsAsked[section.id][qIdx] = currentQuestion;
+    setQuestionsAsked(newQuestionsAsked);
+
+    const sectionAnswersAfter: Record<SectionId, string[]> = {
       strategy: newAnswers.strategy,
       workPlan: newAnswers.workPlan,
       people: newAnswers.people,
@@ -1490,41 +2195,36 @@ function Capture({ navigate }: { navigate: NavFn }) {
       results: newAnswers.results,
     };
 
-    const isLast = qIdx >= section.questions.length - 1;
-    setTyping(true);
+    if (savedWinId) {
+      void patchWin(savedWinId, {
+        answers: newAnswers,
+        questions: newQuestionsAsked,
+      });
+    }
+
+    const isLast = qIdx >= QUESTIONS_PER_SECTION - 1;
 
     if (!isLast) {
-      try {
-        const res = await callCaptureChat({
-          winName: newAnswers.winName,
-          sectionId: section.id,
-          sectionLabel: section.label,
-          questionIndex: qIdx,
-          currentQuestion: section.questions[qIdx],
-          lastAnswer: text,
-          answers: sectionAnswersOnly,
-          mode: "ask_next_question",
-        });
-        setMessages((m) => [
-          ...m,
-          { role: "bot", text: res.assistantMessage, kind: "context" },
-          {
-            role: "bot",
-            text: section.questions[qIdx + 1],
-            kind: "question",
-          },
-        ]);
-        setQIdx(qIdx + 1);
-      } catch (err) {
-        handleApiError(err instanceof Error ? err.message : "");
-        return;
-      }
+      const nextQ = await askNextQuestion(
+        section,
+        qIdx + 1,
+        sectionAnswersAfter,
+        newQuestionsAsked,
+        newAnswers.winName,
+      );
+      setCurrentQuestion(nextQ);
+      setMessages((m) => [
+        ...m,
+        { role: "bot", text: ack, kind: "context" },
+        { role: "bot", text: nextQ, kind: "question" },
+      ]);
+      setQIdx(qIdx + 1);
       setTyping(false);
       setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
       return;
     }
 
-    // End of section — ask the LLM for a real summary, then either move on
+    // End of section — summarize, then either advance to the next section
     // or surface the playbook CTA.
     const isFinalSection = sectionIdx >= EWS_SECTIONS.length - 1;
     try {
@@ -1533,9 +2233,10 @@ function Capture({ navigate }: { navigate: NavFn }) {
         sectionId: section.id,
         sectionLabel: section.label,
         questionIndex: qIdx,
-        currentQuestion: section.questions[qIdx],
-        lastAnswer: text,
-        answers: sectionAnswersOnly,
+        questionsPerSection: QUESTIONS_PER_SECTION,
+        currentQuestion,
+        lastAnswer: captured,
+        answers: sectionAnswersAfter,
         mode: "summarize_section",
       });
 
@@ -1544,6 +2245,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
 
       setMessages((m) => [
         ...m,
+        { role: "bot", text: ack, kind: "context" },
         {
           role: "bot",
           text: summaryRes.assistantMessage || section.summaryLead,
@@ -1560,10 +2262,18 @@ function Capture({ navigate }: { navigate: NavFn }) {
 
       if (!isFinalSection) {
         const next = EWS_SECTIONS[sectionIdx + 1];
+        const firstQ = await askNextQuestion(
+          next,
+          0,
+          sectionAnswersAfter,
+          newQuestionsAsked,
+          newAnswers.winName,
+        );
+        setCurrentQuestion(firstQ);
         setMessages((m) => [
           ...m,
           { role: "bot", text: section.transition, kind: "transition" },
-          { role: "bot", text: next.questions[0], kind: "question" },
+          { role: "bot", text: firstQ, kind: "question" },
         ]);
         setSectionIdx(sectionIdx + 1);
         setQIdx(0);
@@ -1594,14 +2304,19 @@ function Capture({ navigate }: { navigate: NavFn }) {
       operations: [],
       results: [],
     });
+    setQuestionsAsked(EMPTY_SECTION_RECORD());
+    setCurrentQuestion("");
     setMessages([]);
     setComplete(false);
     setPlaybook(null);
+    setSavedWinId(null);
+    setSaveError(null);
     setInput("");
     setTimeout(() => {
       pushBot(
         [
           "Welcome to the Guided Win Builder. I'll help you turn one successful outcome into a repeatable playbook using the Executive Winning System.",
+          "I adapt my questions to your win, and you can ask me a quick business question any time — those won't be saved with the win.",
           "First, what would you like to call this win?",
         ],
         "welcome",
@@ -1618,7 +2333,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
         sectionId: "results",
         sectionLabel: "Results",
         questionIndex: 0,
-        currentQuestion: "",
+        questionsPerSection: QUESTIONS_PER_SECTION,
         answers: {
           strategy: answers.strategy,
           workPlan: answers.workPlan,
@@ -1638,6 +2353,38 @@ function Capture({ navigate }: { navigate: NavFn }) {
           const el = document.getElementById("playbook-card");
           if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 100);
+
+        // Finalize the draft win (created when the user typed the win name).
+        if (savedWinId) {
+          void patchWin(savedWinId, {
+            answers,
+            questions: questionsAsked,
+            answerTitles: res.answerTitles,
+            playbook: res.playbook,
+            description: res.playbook.summaries.strategy?.[0] ?? "",
+          });
+        } else {
+          try {
+            const saveRes = await fetch("/api/wins", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                answers,
+                playbook: res.playbook,
+                questions: questionsAsked,
+                answerTitles: res.answerTitles,
+              }),
+            });
+            if (!saveRes.ok) throw new Error(`Save failed (${saveRes.status})`);
+            const saved = (await saveRes.json()) as { id: string };
+            setSavedWinId(saved.id);
+            setSaveError(null);
+          } catch (err) {
+            setSaveError(
+              err instanceof Error ? err.message : "Could not save this win",
+            );
+          }
+        }
       } else {
         handleApiError("");
       }
@@ -1722,6 +2469,8 @@ function Capture({ navigate }: { navigate: NavFn }) {
             playbook={playbook}
             navigate={navigate}
             onReset={reset}
+            savedWinId={savedWinId}
+            saveError={saveError}
           />
         </div>
       )}
@@ -2146,10 +2895,14 @@ function PlaybookSummaryCard({
   playbook,
   navigate,
   onReset,
+  savedWinId,
+  saveError,
 }: {
   playbook: Playbook;
   navigate: NavFn;
   onReset: () => void;
+  savedWinId: string | null;
+  saveError: string | null;
 }) {
   const sections: { id: SectionId; label: string }[] = [
     { id: "strategy", label: "Strategy Summary" },
@@ -2261,17 +3014,37 @@ function PlaybookSummaryCard({
             <IconShield size={12} /> Visible to your role group
           </span>
           <span className="hairline w-px h-3" />
-          <span className="flex items-center gap-1.5">
-            <IconCheck size={12} className="text-emerald-600" /> Ready to share
-          </span>
+          {savedWinId ? (
+            <span className="flex items-center gap-1.5">
+              <IconCheck size={12} className="text-emerald-600" />
+              Saved as {savedWinId}
+            </span>
+          ) : saveError ? (
+            <span className="flex items-center gap-1.5 text-red-700">
+              Couldn&apos;t save: {saveError}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <IconCheck size={12} className="text-emerald-600" /> Ready to share
+            </span>
+          )}
         </div>
         <div className="flex gap-2">
           <button className="btn-ghost" onClick={onReset}>
             <IconReplay size={14} /> Build another
           </button>
-          <button className="btn-ghost" onClick={() => navigate("replay")}>
-            <IconReplay size={14} /> Replay this
-          </button>
+          {savedWinId ? (
+            <button
+              className="btn-ghost"
+              onClick={() => navigate("win-summary", savedWinId)}
+            >
+              View this win <IconArrow size={14} />
+            </button>
+          ) : (
+            <button className="btn-ghost" onClick={() => navigate("replay")}>
+              <IconReplay size={14} /> Replay this
+            </button>
+          )}
           <button className="btn-gold" onClick={() => navigate("ask")}>
             Coach a teammate <IconArrow size={14} />
           </button>

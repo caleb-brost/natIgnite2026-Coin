@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +16,8 @@ type SectionId =
   | "results";
 type Answers = Record<SectionId, string[]>;
 type Mode =
-  | "ask_next_question"
+  | "pick_next_question"
+  | "process_user_message"
   | "summarize_section"
   | "generate_playbook";
 
@@ -23,11 +26,40 @@ type CaptureChatRequest = {
   sectionId: SectionId;
   sectionLabel: string;
   questionIndex: number;
-  currentQuestion: string;
+  questionsPerSection: number;
+  currentQuestion?: string;
   lastAnswer?: string;
+  userMessage?: string;
   answers: Answers;
+  /** Every question already asked, keyed by section. Used to avoid repeats. */
+  priorQuestions?: Partial<Record<SectionId, string[]>>;
   mode: Mode;
 };
+
+function normalizeQ(q: string): string {
+  return (q || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function flattenPriorQuestions(
+  priorQuestions: Partial<Record<SectionId, string[]>> | undefined,
+): { raw: string[]; normalized: Set<string> } {
+  const raw: string[] = [];
+  const normalized = new Set<string>();
+  if (!priorQuestions) return { raw, normalized };
+  for (const arr of Object.values(priorQuestions)) {
+    if (!Array.isArray(arr)) continue;
+    for (const q of arr) {
+      if (typeof q !== "string" || !q.trim()) continue;
+      raw.push(q.trim());
+      normalized.add(normalizeQ(q));
+    }
+  }
+  return { raw, normalized };
+}
 
 type Playbook = {
   name: string;
@@ -37,6 +69,17 @@ type Playbook = {
   sdj: { save: string; delete: string; join: string };
 };
 
+type ProcessResult =
+  | {
+      kind: "answer";
+      assistantMessage: string;
+      capturedAnswer: string;
+    }
+  | {
+      kind: "side_question";
+      reply: string;
+    };
+
 type CaptureChatResponse = {
   assistantMessage: string;
   nextQuestion?: string | null;
@@ -44,24 +87,30 @@ type CaptureChatResponse = {
   isSectionComplete: boolean;
   isFlowComplete: boolean;
   playbook: Playbook | null;
+  /** Returned by generate_playbook so the client can persist it on the win. */
+  answerTitles?: Record<SectionId, string[]>;
+  /** Returned by process_user_message for side-question routing. */
+  process?: ProcessResult;
 };
 
 const COACH_SYSTEM = `You are Gordian, an Executive Winning System (EWS) leadership coach.
 You guide leaders through capturing one real win across five sections:
 Strategy, Work Plan, People, Operations, Results.
-Be concise, professional, and practical. Never invent facts.
+Be concise, professional, and practical. Never invent facts about the user's organization.
+You may briefly answer a leader's general business question if they ask one mid-flow,
+but your primary job is to help them capture this win.
 When asked for JSON, return valid JSON only — no prose, no code fences.`;
 
-async function callLLM(
-  messages: { role: "system" | "user" | "assistant"; content: string }[],
-): Promise<string> {
+type LlmMessage = { role: "system" | "user" | "assistant"; content: string };
+
+async function callLLM(messages: LlmMessage[]): Promise<string> {
   const res = await fetch(LOCAL_LLM_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
   });
   if (!res.ok) throw new Error(`LLM ${res.status}`);
-  const data = (await res.json()) as { answer: string };
+  const data = (await res.json()) as { answer?: string };
   return (data.answer ?? "").trim();
 }
 
@@ -88,27 +137,267 @@ function tryParseJson<T>(text: string): T | null {
   }
 }
 
-async function generateAck(
+const SECTION_LABELS: Record<SectionId, string> = {
+  strategy: "Strategy",
+  workPlan: "Work Plan",
+  people: "People",
+  operations: "Operations",
+  results: "Results",
+};
+
+const HEADER_TO_SECTION: Record<string, SectionId> = {
+  strategy: "strategy",
+  "work plan": "workPlan",
+  people: "people",
+  operations: "operations",
+  results: "results",
+};
+
+let questionPoolCache:
+  | { mtimeMs: number; pool: Record<SectionId, string[]> }
+  | null = null;
+
+async function loadQuestionPool(): Promise<Record<SectionId, string[]>> {
+  const filePath = path.join(process.cwd(), "data", "questions.md");
+  let stat;
+  try {
+    stat = await fs.stat(filePath);
+  } catch {
+    return {
+      strategy: [],
+      workPlan: [],
+      people: [],
+      operations: [],
+      results: [],
+    };
+  }
+  if (questionPoolCache && questionPoolCache.mtimeMs === stat.mtimeMs) {
+    return questionPoolCache.pool;
+  }
+  const raw = await fs.readFile(filePath, "utf8");
+  const pool: Record<SectionId, string[]> = {
+    strategy: [],
+    workPlan: [],
+    people: [],
+    operations: [],
+    results: [],
+  };
+  let current: SectionId | null = null;
+  for (const lineRaw of raw.split(/\r?\n/)) {
+    const line = lineRaw.trim();
+    if (!line) continue;
+    const h2 = line.match(/^##\s+(.+?)\s*$/);
+    if (h2) {
+      const key = h2[1].toLowerCase();
+      current = HEADER_TO_SECTION[key] ?? null;
+      continue;
+    }
+    if (line.startsWith("#")) continue;
+    if (line.startsWith("---")) continue;
+    if (!current) continue;
+    pool[current].push(line);
+  }
+  questionPoolCache = { mtimeMs: stat.mtimeMs, pool };
+  return pool;
+}
+
+function fallbackQuestion(sectionId: SectionId, qIdx: number): string {
+  const defaults: Record<SectionId, string[]> = {
+    strategy: [
+      "What was the main strategic goal behind this win?",
+      "Why did this win matter to your organization?",
+      "What problem or opportunity were you addressing?",
+      "What constraint shaped the strategy most?",
+    ],
+    workPlan: [
+      "What was the practical plan that made this win happen?",
+      "What were the key milestones?",
+      "What resources or approvals did you need?",
+      "Where did the plan need to flex?",
+    ],
+    people: [
+      "Who helped make this win happen, and in what role?",
+      "What skills or attitudes were decisive?",
+      "Who was Accountable, Consulted, or Told?",
+      "Whose contribution mattered most but is least visible?",
+    ],
+    operations: [
+      "What systems or processes supported this win?",
+      "What operational barriers did you solve?",
+      "Which functions had to coordinate?",
+      "What would need to be standing for someone to repeat it?",
+    ],
+    results: [
+      "What measurable results showed this was a win?",
+      "What quantitative outcomes can you cite?",
+      "What qualitative outcomes can you cite?",
+      "What's the repeatable lesson worth keeping?",
+    ],
+  };
+  const arr = defaults[sectionId];
+  return arr[Math.min(qIdx, arr.length - 1)];
+}
+
+async function pickNextQuestion(
   body: CaptureChatRequest,
 ): Promise<CaptureChatResponse> {
-  const ack = await callLLM([
-    { role: "system", content: COACH_SYSTEM },
-    {
-      role: "user",
-      content:
-        `Section: ${body.sectionLabel}\n` +
-        `Question we just asked: "${body.currentQuestion}"\n` +
-        `User's answer: "${body.lastAnswer ?? ""}"\n\n` +
-        `Reply with a single short acknowledgement (max 12 words). ` +
-        `No follow-up question, no preamble. Plain text only.`,
-    },
-  ]);
+  const pool = await loadQuestionPool();
+  const allCandidates = pool[body.sectionId] ?? [];
+  const askedSoFar = body.answers[body.sectionId] ?? [];
+
+  const { raw: priorRaw, normalized: priorSet } = flattenPriorQuestions(
+    body.priorQuestions,
+  );
+
+  // Drop any candidate that has already been asked (cross-section).
+  const remaining = allCandidates.filter(
+    (q) => !priorSet.has(normalizeQ(q)),
+  );
+
+  const numbered = (remaining.length ? remaining : allCandidates)
+    .map((q, i) => `  ${i + 1}. ${q}`)
+    .join("\n");
+  const priorAnswers = askedSoFar
+    .map((a, i) => `  Q${i + 1} answer: ${a}`)
+    .join("\n");
+  const priorQuestionsBlock = priorRaw
+    .map((q, i) => `  ${i + 1}. ${q}`)
+    .join("\n");
+
+  const userBlock =
+    `Win: "${body.winName || "(unnamed)"}"\n` +
+    `Current section: ${body.sectionLabel}\n` +
+    `Question slot: ${body.questionIndex + 1} of ${body.questionsPerSection}\n` +
+    `Candidate questions still available for this section:\n${numbered || "  (none)"}\n` +
+    (priorQuestionsBlock
+      ? `Questions already asked in this capture (DO NOT REPEAT or paraphrase any of these):\n${priorQuestionsBlock}\n`
+      : "") +
+    (priorAnswers
+      ? `Prior answers in this section (avoid asking what's already covered):\n${priorAnswers}\n`
+      : "") +
+    `Pick or adapt ONE question that fits this leader's win type, opens new ground, ` +
+    `and does not overlap in meaning with any question listed under "already asked". ` +
+    `Return JSON: {"question": "..."}. The question must be a single sentence, plain text.`;
+
+  let question: string | undefined;
+  try {
+    const llmRaw = await callLLM([
+      { role: "system", content: COACH_SYSTEM },
+      { role: "user", content: userBlock },
+    ]);
+    const parsed = tryParseJson<{ question?: string }>(llmRaw);
+    if (parsed?.question && typeof parsed.question === "string") {
+      question = parsed.question.trim();
+    } else if (llmRaw) {
+      question = llmRaw.replace(/^[-*•\d.)\s]+/, "").trim();
+    }
+  } catch {
+    // fall through to fallback
+  }
+
+  // If the LLM returned a duplicate (or nothing usable), pick the first
+  // remaining candidate that hasn't been asked yet.
+  const isDuplicate = (q: string | undefined) =>
+    !!q && priorSet.has(normalizeQ(q));
+
+  if (!question || isDuplicate(question)) {
+    const firstFresh =
+      remaining[0] ??
+      allCandidates.find((q) => !priorSet.has(normalizeQ(q))) ??
+      fallbackQuestion(body.sectionId, body.questionIndex);
+    question = firstFresh;
+  }
+
+  // Final guard — even fallbacks shouldn't repeat a prior question.
+  if (isDuplicate(question)) {
+    const idx = body.questionIndex % allCandidates.length;
+    const offset = (start: number) => {
+      for (let i = 0; i < allCandidates.length; i++) {
+        const candidate = allCandidates[(start + i) % allCandidates.length];
+        if (!priorSet.has(normalizeQ(candidate))) return candidate;
+      }
+      return undefined;
+    };
+    question =
+      offset(idx) ??
+      `${fallbackQuestion(body.sectionId, body.questionIndex)} (anything new to add?)`;
+  }
+
   return {
-    assistantMessage: ack || "Captured.",
-    nextQuestion: null,
+    assistantMessage: question,
+    nextQuestion: question,
     isSectionComplete: false,
     isFlowComplete: false,
     playbook: null,
+  };
+}
+
+async function processUserMessage(
+  body: CaptureChatRequest,
+): Promise<CaptureChatResponse> {
+  const message = (body.userMessage ?? "").trim();
+  if (!message) {
+    return {
+      assistantMessage: "I didn't catch that — could you rephrase?",
+      isSectionComplete: false,
+      isFlowComplete: false,
+      playbook: null,
+      process: { kind: "side_question", reply: "I didn't catch that — could you rephrase?" },
+    };
+  }
+
+  const prompt =
+    `You are mid-capture. Section: ${body.sectionLabel}.\n` +
+    `Question we just asked the leader: "${body.currentQuestion ?? ""}"\n` +
+    `Leader's message: "${message}"\n\n` +
+    `Classify the message as one of:\n` +
+    `  side_question — the leader is asking YOU something (definitions, frameworks, advice, examples). ` +
+    `Signals: ends with "?", starts with what/how/why/when/should/can/do/is, asks for examples, asks you to explain a term.\n` +
+    `  answer — the leader is responding to the question above with their own facts about the win. ` +
+    `Signals: declarative, names people/numbers/timelines, describes what they did.\n\n` +
+    `Examples:\n` +
+    `  "What does 'repeatable rule' mean?" -> side_question\n` +
+    `  "Can you give me an example of a strategy answer?" -> side_question\n` +
+    `  "How do other leaders usually describe this?" -> side_question\n` +
+    `  "Our goal was to retain a top-10 account before it churned." -> answer\n` +
+    `  "Maya led it, with help from Daniel and Priya." -> answer\n\n` +
+    `Respond as JSON only with one of these shapes:\n` +
+    `  {"kind":"answer","ack":"<<= 12 word acknowledgement, no follow-up question>>"}\n` +
+    `  {"kind":"side_question","reply":"<<concise 1-3 sentence answer to their question>>"}\n` +
+    `When in doubt and the message is interrogative or asks for help, choose side_question.`;
+
+  type Parsed = { kind?: string; ack?: string; reply?: string };
+  let parsed: Parsed | null = null;
+  try {
+    const raw = await callLLM([
+      { role: "system", content: COACH_SYSTEM },
+      { role: "user", content: prompt },
+    ]);
+    parsed = tryParseJson<Parsed>(raw);
+  } catch {
+    parsed = null;
+  }
+
+  if (parsed?.kind === "side_question" && typeof parsed.reply === "string") {
+    return {
+      assistantMessage: parsed.reply,
+      isSectionComplete: false,
+      isFlowComplete: false,
+      playbook: null,
+      process: { kind: "side_question", reply: parsed.reply },
+    };
+  }
+
+  const ack =
+    (parsed?.kind === "answer" && parsed.ack && typeof parsed.ack === "string"
+      ? parsed.ack
+      : "Captured.");
+  return {
+    assistantMessage: ack,
+    isSectionComplete: false,
+    isFlowComplete: false,
+    playbook: null,
+    process: { kind: "answer", assistantMessage: ack, capturedAnswer: message },
   };
 }
 
@@ -148,12 +437,8 @@ async function generateSectionSummary(
   };
 }
 
-const SECTION_LABELS: Record<SectionId, string> = {
-  strategy: "Strategy",
-  workPlan: "Work Plan",
-  people: "People",
-  operations: "Operations",
-  results: "Results",
+type PlaybookWithTitles = Omit<Playbook, "name"> & {
+  answerTitles: Record<SectionId, string[]>;
 };
 
 async function generatePlaybook(
@@ -185,16 +470,25 @@ async function generatePlaybook(
     `    "save": "what to repeat",\n` +
     `    "delete": "what to avoid",\n` +
     `    "join": "what to connect to"\n` +
+    `  },\n` +
+    `  "answerTitles": {\n` +
+    `    "strategy": ["..."],\n` +
+    `    "workPlan": ["..."],\n` +
+    `    "people": ["..."],\n` +
+    `    "operations": ["..."],\n` +
+    `    "results": ["..."]\n` +
     `  }\n` +
     `}\n` +
-    `Each summary array: 2-4 short bullets. Return JSON only.`;
+    `Each summary array: 2-4 short bullets. ` +
+    `answerTitles must have ONE 1-6 word headline per answer in the SAME order as the answers above. ` +
+    `Return JSON only.`;
 
   const raw = await callLLM([
     { role: "system", content: COACH_SYSTEM },
     { role: "user", content: prompt },
   ]);
 
-  const parsed = tryParseJson<Omit<Playbook, "name">>(raw);
+  const parsed = tryParseJson<PlaybookWithTitles>(raw);
   const fallbackSummaries: Record<SectionId, string[]> = {
     strategy: body.answers.strategy ?? [],
     workPlan: body.answers.workPlan ?? [],
@@ -219,12 +513,38 @@ async function generatePlaybook(
     },
   };
 
+  const answerTitles =
+    parsed?.answerTitles ?? deriveTitlesFallback(body.answers);
+
   return {
     assistantMessage: "Your Executive Winning System playbook is ready.",
     isSectionComplete: true,
     isFlowComplete: true,
     playbook,
+    answerTitles,
   };
+}
+
+function deriveTitlesFallback(
+  answers: Answers,
+): Record<SectionId, string[]> {
+  const out: Record<SectionId, string[]> = {
+    strategy: [],
+    workPlan: [],
+    people: [],
+    operations: [],
+    results: [],
+  };
+  (Object.keys(out) as SectionId[]).forEach((k) => {
+    out[k] = (answers[k] ?? []).map((body) => {
+      const clean = (body || "").replace(/\s+/g, " ").trim();
+      const words = clean.split(" ");
+      return words.length <= 6
+        ? clean.replace(/[.!?,;:]+$/, "")
+        : words.slice(0, 6).join(" ").replace(/[.!?,;:]+$/, "") + "…";
+    });
+  });
+  return out;
 }
 
 export async function POST(request: NextRequest) {
@@ -238,8 +558,11 @@ export async function POST(request: NextRequest) {
   try {
     let result: CaptureChatResponse;
     switch (body.mode) {
-      case "ask_next_question":
-        result = await generateAck(body);
+      case "pick_next_question":
+        result = await pickNextQuestion(body);
+        break;
+      case "process_user_message":
+        result = await processUserMessage(body);
         break;
       case "summarize_section":
         result = await generateSectionSummary(body);

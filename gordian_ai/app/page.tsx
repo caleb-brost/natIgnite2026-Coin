@@ -723,55 +723,83 @@ function Dashboard({ navigate }: { navigate: NavFn }) {
 // Ask Gordian
 // =====================================================================
 
-type ChatMsg = { role: "user" | "assistant"; text: string; sources?: boolean };
+type ChatSource = { title: string; type: string };
+type ChatMsg = {
+  role: "user" | "assistant";
+  text: string;
+  sources?: boolean;
+  sourceList?: ChatSource[];
+};
 
 function Ask() {
-  const aiAnswer =
-    "Based on a similar client recovery win, start by identifying whether the issue is truly the delay, or whether it is a communication and trust problem. Before responding externally, align the internal team, assign clear owners, and create a short recovery plan. The repeatable rule is: when trust is at risk, align internally before promising externally.";
-
-  const [messages, setMessages] = React.useState<ChatMsg[]>([
-    {
-      role: "user",
-      text: "How should I handle a client who is frustrated with project delays?",
-    },
-  ]);
-  const [typing, setTyping] = React.useState(true);
+  const [messages, setMessages] = React.useState<ChatMsg[]>([]);
+  const [typing, setTyping] = React.useState(false);
   const [input, setInput] = React.useState("");
   const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const t = setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", text: aiAnswer, sources: true },
-      ]);
-      setTyping(false);
-    }, 1400);
-    return () => clearTimeout(t);
-  }, []);
 
   React.useEffect(() => {
     if (scrollRef.current)
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, typing]);
 
-  const send = (text?: string) => {
+  const send = async (text?: string) => {
     const t = (text ?? input).trim();
-    if (!t) return;
-    setMessages((m) => [...m, { role: "user", text: t }]);
+    if (!t || typing) return;
+
+    const nextMessages: ChatMsg[] = [
+      ...messages,
+      { role: "user", text: t },
+    ];
+    setMessages(nextMessages);
     setInput("");
     setTyping(true);
-    setTimeout(() => {
+
+    try {
+      const res = await fetch("/api/gordian-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages.map((m) => ({
+            role: m.role,
+            content: m.text,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          (data as { error?: string }).error ??
+            `Request failed with status ${res.status}`,
+        );
+      }
+
+      const data = (await res.json()) as {
+        answer: string;
+        sources?: ChatSource[];
+      };
+
       setMessages((m) => [
         ...m,
         {
           role: "assistant",
-          text: 'Gordian found two related wins. The closest match is "Client Recovery Through Fast Alignment." The same pattern applies — diagnose the underlying concern, align internally, then communicate one clear message.',
-          sources: true,
+          text: data.answer,
+          sources: Boolean(data.sources && data.sources.length),
+          sourceList: data.sources,
         },
       ]);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "I couldn't reach the local Gordian model. Make sure the local-llm server is running on port 8001.";
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", text: message },
+      ]);
+    } finally {
       setTyping(false);
-    }, 1100);
+    }
   };
 
   const suggestions = [
@@ -890,17 +918,12 @@ function AskMessage({ m }: { m: ChatMsg }) {
         </div>
         {m.sources && (
           <div className="flex flex-wrap gap-1.5 mt-2">
-            <span className="chip chip-gold">
-              <IconDoc size={11} /> Source: Client Recovery Through Fast
-              Alignment
-            </span>
-            <span className="chip">
-              <IconCheck size={11} className="text-emerald-600" /> Confidence:
-              High
-            </span>
-            <span className="chip">
-              <IconReplay size={11} /> Related playbook: Client Recovery
-            </span>
+            {(m.sourceList ?? []).map((s, idx) => (
+              <span key={idx} className="chip chip-gold">
+                <IconDoc size={11} /> {s.title}
+                {s.type ? ` · ${s.type}` : ""}
+              </span>
+            ))}
           </div>
         )}
         <div className="text-[11px] text-slate2-400 mt-1.5">
@@ -1303,30 +1326,9 @@ type ChatBubbleMsg =
       sectionLabel?: string;
     };
 
-function pickAck(text: string) {
-  const t = (text || "").trim();
-  if (!t) return "Got it.";
-  const word = t.split(/\s+/)[0];
-  const acks = [
-    "Captured.",
-    "Got it — thanks for the detail.",
-    "Useful signal.",
-    "Noted.",
-    `"${word}…" — that's a strong starting point.`,
-    "Clear.",
-  ];
-  return acks[Math.floor(Math.random() * acks.length)];
-}
-
 function shorten(s: string, n = 140) {
   s = (s || "").replace(/\s+/g, " ").trim();
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
-
-function makeSectionSummary(sectionIdx: number, answers: Answers) {
-  const s = EWS_SECTIONS[sectionIdx];
-  const arr = answers[s.id] || [];
-  return arr.map((a) => (a || "").trim()).filter(Boolean);
 }
 
 type Playbook = {
@@ -1337,33 +1339,46 @@ type Playbook = {
   sdj: { save: string; delete: string; join: string };
 };
 
-function buildPlaybook(answers: Answers): Playbook {
-  const summaries = {
-    strategy: [],
-    workPlan: [],
-    people: [],
-    operations: [],
-    results: [],
-  } as Record<SectionId, string[]>;
-  EWS_SECTIONS.forEach((s, i) => {
-    summaries[s.id] = makeSectionSummary(i, answers);
+type CaptureChatMode =
+  | "ask_next_question"
+  | "summarize_section"
+  | "generate_playbook";
+
+type CaptureChatRequest = {
+  winName: string;
+  sectionId: SectionId;
+  sectionLabel: string;
+  questionIndex: number;
+  currentQuestion: string;
+  lastAnswer?: string;
+  answers: Record<SectionId, string[]>;
+  mode: CaptureChatMode;
+};
+
+type CaptureChatResponse = {
+  assistantMessage: string;
+  nextQuestion?: string | null;
+  sectionSummary?: string[];
+  isSectionComplete: boolean;
+  isFlowComplete: boolean;
+  playbook: Playbook | null;
+};
+
+async function callCaptureChat(
+  req: CaptureChatRequest,
+): Promise<CaptureChatResponse> {
+  const res = await fetch("/api/capture-win-chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
   });
-  const lastResult = (answers.results && answers.results[3]) || "";
-  const repeatableRule =
-    lastResult ||
-    "Align the right people around a clear plan, then measure honestly.";
-  return {
-    name: answers.winName || "Untitled Win",
-    summaries,
-    repeatableRule,
-    suggestedNextWin:
-      "Pilot the same playbook on a parallel team or account in the next quarter.",
-    sdj: {
-      save: "Pre-decision alignment ritual and the named owners model.",
-      delete: "Reactive external promises before the team is aligned.",
-      join: "Combine with the Cross-team Handoff playbook to compound the impact.",
-    },
-  };
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(
+      data.error ?? `Capture chat failed with status ${res.status}`,
+    );
+  }
+  return (await res.json()) as CaptureChatResponse;
 }
 
 function Capture({ navigate }: { navigate: NavFn }) {
@@ -1424,6 +1439,20 @@ function Capture({ navigate }: { navigate: NavFn }) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, typing]);
 
+  const handleApiError = React.useCallback((message: string) => {
+    setMessages((m) => [
+      ...m,
+      {
+        role: "bot",
+        text:
+          message ||
+          "I couldn't reach the Gordian model right now. Make sure the local LLM server is running, then try again.",
+        kind: "context",
+      },
+    ]);
+    setTyping(false);
+  }, []);
+
   const submit = async (raw?: string) => {
     const text = (raw ?? input).trim();
     if (!text || typing || complete) return;
@@ -1453,60 +1482,101 @@ function Capture({ navigate }: { navigate: NavFn }) {
     newAnswers[section.id][qIdx] = text;
     setAnswers(newAnswers);
 
+    const sectionAnswersOnly: Record<SectionId, string[]> = {
+      strategy: newAnswers.strategy,
+      workPlan: newAnswers.workPlan,
+      people: newAnswers.people,
+      operations: newAnswers.operations,
+      results: newAnswers.results,
+    };
+
     const isLast = qIdx >= section.questions.length - 1;
-    await new Promise((r) => setTimeout(r, 480 + Math.random() * 220));
-    const ack = pickAck(text);
+    setTyping(true);
 
     if (!isLast) {
-      await pushBot([ack, section.questions[qIdx + 1]], "question");
-      setQIdx(qIdx + 1);
+      try {
+        const res = await callCaptureChat({
+          winName: newAnswers.winName,
+          sectionId: section.id,
+          sectionLabel: section.label,
+          questionIndex: qIdx,
+          currentQuestion: section.questions[qIdx],
+          lastAnswer: text,
+          answers: sectionAnswersOnly,
+          mode: "ask_next_question",
+        });
+        setMessages((m) => [
+          ...m,
+          { role: "bot", text: res.assistantMessage, kind: "context" },
+          {
+            role: "bot",
+            text: section.questions[qIdx + 1],
+            kind: "question",
+          },
+        ]);
+        setQIdx(qIdx + 1);
+      } catch (err) {
+        handleApiError(err instanceof Error ? err.message : "");
+        return;
+      }
+      setTyping(false);
+      setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
       return;
     }
 
-    const captured = makeSectionSummary(sectionIdx, newAnswers);
-    const summaryBubble = captured.map((c) => `• ${shorten(c)}`).join("\n");
+    // End of section — ask the LLM for a real summary, then either move on
+    // or surface the playbook CTA.
     const isFinalSection = sectionIdx >= EWS_SECTIONS.length - 1;
-
-    setTyping(true);
-    await new Promise((r) => setTimeout(r, 420));
-    setMessages((m) => [...m, { role: "bot", text: ack, kind: "context" }]);
-    await new Promise((r) => setTimeout(r, 360));
-    setMessages((m) => [
-      ...m,
-      {
-        role: "bot",
-        text: summaryBubble,
-        kind: "summary",
+    try {
+      const summaryRes = await callCaptureChat({
+        winName: newAnswers.winName,
         sectionId: section.id,
         sectionLabel: section.label,
-      },
-    ]);
-    await new Promise((r) => setTimeout(r, 360));
-    setMessages((m) => [
-      ...m,
-      { role: "bot", text: section.summaryLead, kind: "context" },
-    ]);
-    await new Promise((r) => setTimeout(r, 320));
+        questionIndex: qIdx,
+        currentQuestion: section.questions[qIdx],
+        lastAnswer: text,
+        answers: sectionAnswersOnly,
+        mode: "summarize_section",
+      });
 
-    if (!isFinalSection) {
-      const next = EWS_SECTIONS[sectionIdx + 1];
+      const bullets = summaryRes.sectionSummary ?? [];
+      const summaryBubble = bullets.map((c) => `• ${shorten(c)}`).join("\n");
+
       setMessages((m) => [
         ...m,
-        { role: "bot", text: section.transition, kind: "transition" },
+        {
+          role: "bot",
+          text: summaryRes.assistantMessage || section.summaryLead,
+          kind: "context",
+        },
+        {
+          role: "bot",
+          text: summaryBubble,
+          kind: "summary",
+          sectionId: section.id,
+          sectionLabel: section.label,
+        },
       ]);
-      await new Promise((r) => setTimeout(r, 420));
-      setMessages((m) => [
-        ...m,
-        { role: "bot", text: next.questions[0], kind: "question" },
-      ]);
-      setSectionIdx(sectionIdx + 1);
-      setQIdx(0);
-    } else {
-      setMessages((m) => [
-        ...m,
-        { role: "bot", text: section.transition, kind: "cta" },
-      ]);
-      setComplete(true);
+
+      if (!isFinalSection) {
+        const next = EWS_SECTIONS[sectionIdx + 1];
+        setMessages((m) => [
+          ...m,
+          { role: "bot", text: section.transition, kind: "transition" },
+          { role: "bot", text: next.questions[0], kind: "question" },
+        ]);
+        setSectionIdx(sectionIdx + 1);
+        setQIdx(0);
+      } else {
+        setMessages((m) => [
+          ...m,
+          { role: "bot", text: section.transition, kind: "cta" },
+        ]);
+        setComplete(true);
+      }
+    } catch (err) {
+      handleApiError(err instanceof Error ? err.message : "");
+      return;
     }
     setTyping(false);
     setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
@@ -1539,12 +1609,43 @@ function Capture({ navigate }: { navigate: NavFn }) {
     }, 80);
   };
 
-  const generate = () => {
-    setPlaybook(buildPlaybook(answers));
-    setTimeout(() => {
-      const el = document.getElementById("playbook-card");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
+  const generate = async () => {
+    if (typing) return;
+    setTyping(true);
+    try {
+      const res = await callCaptureChat({
+        winName: answers.winName,
+        sectionId: "results",
+        sectionLabel: "Results",
+        questionIndex: 0,
+        currentQuestion: "",
+        answers: {
+          strategy: answers.strategy,
+          workPlan: answers.workPlan,
+          people: answers.people,
+          operations: answers.operations,
+          results: answers.results,
+        },
+        mode: "generate_playbook",
+      });
+      if (res.playbook) {
+        setPlaybook(res.playbook);
+        setMessages((m) => [
+          ...m,
+          { role: "bot", text: res.assistantMessage, kind: "cta" },
+        ]);
+        setTimeout(() => {
+          const el = document.getElementById("playbook-card");
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+      } else {
+        handleApiError("");
+      }
+    } catch (err) {
+      handleApiError(err instanceof Error ? err.message : "");
+    } finally {
+      setTyping(false);
+    }
   };
 
   const currentSection = sectionIdx >= 0 ? EWS_SECTIONS[sectionIdx] : null;

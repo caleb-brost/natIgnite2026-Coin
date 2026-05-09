@@ -1,0 +1,111 @@
+{
+  "id": "WIN-001",
+  "name": "Client Recovery Through Fast Alignment",
+  "createdAt": "2026-05-07T15:42:00.000Z",
+  "author": "Maya Okafor",
+  "tags": ["Client Success", "Leadership"],
+  "description": "Realigned the internal team in under 48 hours before responding externally, recovering a major at-risk account.",
+  "featured": true,
+  "answers": {
+    "winName": "Client Recovery Through Fast Alignment",
+    "strategy": [
+      "Protect a top-10 ARR account that had escalated three issues in two weeks.",
+      "Demonstrate that customer-success can run an internal rapid-response loop without involving the exec team.",
+      "Aligned with our 'trust before throughput' company value.",
+      "Mattered because losing this account would trigger a board-level escalation."
+    ],
+    "workPlan": [
+      "Triage call within 4 hours of the escalation email; one written response promised within 48.",
+      "Milestones: internal alignment doc by EOD day 1, joint customer call by day 2, written commitment by day 3.",
+      "Tasks: pull all support history, draft the response, get sign-off from CS lead and account exec.",
+      "Resources: 1 day of CS lead time, async review from product, no extra budget."
+    ],
+    "people": [
+      "Maya (CS lead) drove it. Daniel (account exec) brought the relationship history. Priya (product) sanity-checked the technical fix.",
+      "Maya = Accountable, Daniel = Consulted, Priya = Consulted, exec team = Told.",
+      "What worked: Daniel's calm framing of the customer's actual fear (vs. the surface complaint).",
+      "Held back from looping in the exec team until we had a real plan to share."
+    ],
+    "operations": [
+      "Used the existing escalation runbook but compressed every step from days to hours.",
+      "Biggest barrier: the support history was spread across three tools. Maya manually consolidated it.",
+      "Functions involved: Customer Success, Sales, Product.",
+      "To repeat: a single canonical view of customer history and a pre-agreed 48-hour SLA for top-tier accounts."
+    ],
+    "results": [
+      "Account renewed for 18 months at +12% expansion, two weeks ahead of the original renewal date.",
+      "Quantitative: $480k ARR retained, ~6 hours of CS lead time invested, zero exec escalation.",
+      "Qualitative: customer CSM described us as 'the most aligned vendor they work with'; internal team morale lifted.",
+      "Repeatable lesson: align internally before responding externally — even when the customer is loudest about wanting a fast reply."
+    ]
+  },
+  "answerTitles": {
+    "strategy": [
+      "Defend top-10 ARR account",
+      "Prove CS-led rapid response",
+      "Anchor to trust-first value",
+      "Avoid board-level escalation"
+    ],
+    "workPlan": [
+      "4-hour triage SLA",
+      "Three-day milestone path",
+      "Consolidate, draft, sign-off",
+      "One CS day, no budget"
+    ],
+    "people": [
+      "Cross-functional trio led it",
+      "RACI: CS Accountable",
+      "Reframe customer's real fear",
+      "Hold execs until plan ready"
+    ],
+    "operations": [
+      "Compress runbook to hours",
+      "History scattered across tools",
+      "CS, Sales, Product involved",
+      "Need unified history view"
+    ],
+    "results": [
+      "+12% expansion, pulled forward",
+      "$480k ARR retained",
+      "Customer praised our alignment",
+      "Align internally first"
+    ]
+  },
+  "playbook": {
+    "name": "Client Recovery Through Fast Alignment",
+    "summaries": {
+      "strategy": [
+        "Defend a top-10 ARR account before it required exec escalation.",
+        "Prove that CS can lead rapid-response cross-functionally.",
+        "Anchored to the 'trust before throughput' value."
+      ],
+      "workPlan": [
+        "4-hour triage, 48-hour written response, 72-hour customer commitment.",
+        "Compressed an existing runbook from days to hours.",
+        "Single CS lead day plus async product review — no extra budget."
+      ],
+      "people": [
+        "CS lead Accountable, account exec and product Consulted, execs only Told.",
+        "Strength: framing the customer's underlying fear, not just their stated complaint.",
+        "Discipline: didn't escalate to execs until a plan existed."
+      ],
+      "operations": [
+        "Re-used the escalation runbook on a tight clock.",
+        "Manual consolidation across three tools was the real bottleneck.",
+        "Repeatability needs a unified customer-history view."
+      ],
+      "results": [
+        "$480k ARR retained, +12% expansion, renewal pulled forward two weeks.",
+        "Zero exec escalation; customer publicly praised our alignment.",
+        "Lesson: align internally before responding externally."
+      ]
+    },
+    "repeatableRule": "When a top account escalates, align internally before you respond externally — and let the calmest voice frame the customer's real fear.",
+    "suggestedNextWin": "Pilot a 'unified customer history' view for the top 20 accounts so the next 4-hour triage doesn't need manual consolidation.",
+    "sdj": {
+      "save": "The 4h-triage / 48h-response cadence and the discipline of holding execs in the loop only after a plan exists.",
+      "delete": "Manual consolidation of customer history across three tools — it cost the most and added the least.",
+      "join": "Combine with any future 'top-account playbook' work so the runbook and the data layer ship together."
+    }
+  }
+}

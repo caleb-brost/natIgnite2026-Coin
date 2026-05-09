@@ -39,7 +39,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# captured wins (runtime data)
-/data/wins/*.json
-!/data/wins/.gitkeep

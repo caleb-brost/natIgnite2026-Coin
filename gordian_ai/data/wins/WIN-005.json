@@ -1,0 +1,18 @@
+{
+  "id": "WIN-005",
+  "name": "Based on my wins, what is the biggest lesson I learned?",
+  "createdAt": "2026-05-09T17:49:28.822Z",
+  "updatedAt": "2026-05-09T17:49:28.822Z",
+  "author": "Lin",
+  "tags": [],
+  "description": "",
+  "featured": false,
+  "answers": {
+    "winName": "Based on my wins, what is the biggest lesson I learned?",
+    "strategy": [],
+    "workPlan": [],
+    "people": [],
+    "operations": [],
+    "results": []
+  }
+}

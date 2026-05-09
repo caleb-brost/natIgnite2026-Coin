@@ -464,12 +464,12 @@ async function generatePlaybook(
     `    "operations": ["..."],\n` +
     `    "results": ["..."]\n` +
     `  },\n` +
-    `  "repeatableRule": "one sentence — the lesson worth repeating",\n` +
-    `  "suggestedNextWin": "one short sentence",\n` +
+    `  "repeatableRule": "one sentence — the concrete lesson from THIS win worth repeating",\n` +
+    `  "suggestedNextWin": "one short sentence — a specific next win this leader should pursue",\n` +
     `  "sdj": {\n` +
-    `    "save": "what to repeat",\n` +
-    `    "delete": "what to avoid",\n` +
-    `    "join": "what to connect to"\n` +
+    `    "save": "one sentence naming the specific practice, decision, or behavior from THIS win that should be kept and repeated — not a generic definition",\n` +
+    `    "delete": "one sentence naming the specific friction, misstep, or obstacle from THIS win that should be eliminated next time — not a generic definition",\n` +
+    `    "join": "one sentence naming a specific adjacent team, initiative, or opportunity that could benefit from connecting with THIS win's approach — not a generic definition"\n` +
     `  },\n` +
     `  "answerTitles": {\n` +
     `    "strategy": ["..."],\n` +
@@ -480,6 +480,7 @@ async function generatePlaybook(
     `  }\n` +
     `}\n` +
     `Each summary array: 2-4 short bullets. ` +
+    `SDJ values must be specific to this win — draw directly from the answers above, not from general knowledge. ` +
     `answerTitles: for each answer, write ONE concise 2-5 word label that names the core idea — ` +
     `think "Client Retention Goal" not "Our goal was to". ` +
     `Do NOT copy the first words of the answer; distill the essential concept into a meaningful noun phrase. ` +
@@ -500,6 +501,30 @@ async function generatePlaybook(
     results: body.answers.results ?? [],
   };
 
+  let sdj = parsed?.sdj;
+  if (!sdj) {
+    try {
+      const sdjRaw = await callLLM([
+        { role: "system", content: COACH_SYSTEM },
+        {
+          role: "user",
+          content:
+            `Win name: "${body.winName}"\n\n${sectionsBlock}\n\n` +
+            `Based solely on the answers above, produce a JSON object:\n` +
+            `{\n` +
+            `  "save": "one sentence — the specific practice or decision from this win to keep repeating",\n` +
+            `  "delete": "one sentence — the specific friction or misstep from this win to eliminate next time",\n` +
+            `  "join": "one sentence — a specific adjacent team or initiative to connect with this win's approach"\n` +
+            `}\n` +
+            `Be concrete and specific to this win. Return JSON only.`,
+        },
+      ]);
+      sdj = tryParseJson<{ save: string; delete: string; join: string }>(sdjRaw) ?? undefined;
+    } catch {
+      // fall through to static fallback
+    }
+  }
+
   const playbook: Playbook = {
     name: body.winName || "Untitled Win",
     summaries: parsed?.summaries ?? fallbackSummaries,
@@ -509,7 +534,7 @@ async function generatePlaybook(
     suggestedNextWin:
       parsed?.suggestedNextWin ??
       "Pilot this playbook on a parallel team in the next quarter.",
-    sdj: parsed?.sdj ?? {
+    sdj: sdj ?? {
       save: "The decisions and rituals that drove this win.",
       delete: "The friction points the team had to work around.",
       join: "Adjacent playbooks that share the same pattern.",

@@ -827,8 +827,42 @@ function WinList({
               <h3 className="text-navy-900 font-medium mt-1 group-hover:text-gold-700 transition-colors">
                 {w.name}
               </h3>
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {(
+                  [
+                    { id: "strategy", label: "Strategy" },
+                    { id: "workPlan", label: "Work Plan" },
+                    { id: "people", label: "People" },
+                    { id: "operations", label: "Operations" },
+                    { id: "results", label: "Results" },
+                  ] as { id: keyof typeof w.answers; label: string }[]
+                ).map((sec) => {
+                  const filled =
+                    Array.isArray(w.answers?.[sec.id]) &&
+                    (w.answers[sec.id] as string[]).some(Boolean);
+                  return (
+                    <span
+                      key={sec.id}
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                        filled
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-slate2-50 text-slate2-400 border border-slate2-100"
+                      }`}
+                    >
+                      {filled && <IconCheck size={8} className="inline mr-0.5" />}
+                      {sec.label}
+                    </span>
+                  );
+                })}
+                {w.playbook && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gold-50 text-gold-700 border border-gold-200">
+                    <IconSparkle size={8} className="inline mr-0.5" />
+                    Playbook
+                  </span>
+                )}
+              </div>
               {w.description && (
-                <p className="text-sm text-slate2-500 mt-1 leading-relaxed">
+                <p className="text-sm text-slate2-500 mt-1.5 leading-relaxed">
                   {w.description}
                 </p>
               )}
@@ -948,10 +982,40 @@ function WinSummary({
           setActiveSdj(data.aiSummary.sdj);
           setSdjSource("ai");
           setSdjGeneratedAt(data.aiSummary.generatedAt);
-        } else if (data.playbook) {
-          setActiveSdj(data.playbook.sdj);
-          setSdjSource("capture");
-          setSdjGeneratedAt(data.createdAt);
+        } else {
+          // No AI summary yet — auto-generate on first view.
+          if (alive) setRefreshing(true);
+          try {
+            const sumRes = await fetch(`/api/wins/${data.id}/summary`, {
+              method: "POST",
+            });
+            if (sumRes.ok) {
+              const sumData = (await sumRes.json()) as {
+                sdj: StoredSdj;
+                source: "ai" | "fallback";
+                generatedAt: string;
+              };
+              if (alive) {
+                setActiveSdj(sumData.sdj);
+                setSdjSource(sumData.source);
+                setSdjGeneratedAt(sumData.generatedAt);
+              }
+            } else if (data.playbook) {
+              if (alive) {
+                setActiveSdj(data.playbook.sdj);
+                setSdjSource("capture");
+                setSdjGeneratedAt(data.createdAt);
+              }
+            }
+          } catch {
+            if (data.playbook && alive) {
+              setActiveSdj(data.playbook.sdj);
+              setSdjSource("capture");
+              setSdjGeneratedAt(data.createdAt);
+            }
+          } finally {
+            if (alive) setRefreshing(false);
+          }
         }
       } catch {
         if (alive) setNotFound(true);
@@ -1016,7 +1080,10 @@ function WinSummary({
     );
   }
 
-  if (!win.playbook || !activeSdj) {
+  const hasAnyAnswers = Object.values(win.answers).some(
+    (v) => Array.isArray(v) && (v as string[]).some(Boolean),
+  );
+  if (!hasAnyAnswers) {
     return (
       <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
         <div className="card p-10 text-center">
@@ -1027,8 +1094,8 @@ function WinSummary({
             {win.name || "Untitled win"}
           </h2>
           <p className="text-sm text-slate2-500 mt-2">
-            This win is still being captured. Finish the guided builder to
-            generate its playbook and feedback.
+            This win has no answers yet. Resume the guided builder to start
+            capturing.
           </p>
           <button
             className="btn-gold mt-5"
@@ -1198,21 +1265,21 @@ function WinSummary({
               label="Save"
               tone="emerald"
               text={activeSdj.save}
-              hint="What to save from this win"
+              hint="What the business should keep and repeat going forward"
             />
             <WsdjRow
               letter="D"
               label="Delete"
               tone="red"
               text={activeSdj.delete}
-              hint="What to delete from this win"
+              hint="What should not be repeated in a similar strategy"
             />
             <WsdjRow
               letter="J"
               label="Join"
               tone="gold"
               text={activeSdj.join}
-              hint="What to combine with other wins"
+              hint="What to combine with this approach to improve results"
             />
           </div>
         </div>

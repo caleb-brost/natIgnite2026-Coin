@@ -1,6 +1,5 @@
 import {
   getWin,
-  isFinalized,
   isValidWinId,
   listWins,
   saveWin,
@@ -16,12 +15,11 @@ const LOCAL_LLM_URL =
   process.env.LOCAL_LLM_URL ?? "http://127.0.0.1:8001/chat";
 
 const SYSTEM_PROMPT = `You are Gordian, an Executive Winning System (EWS) leadership coach.
-Given ONE focal captured win plus a corpus of prior wins from the same organization,
-produce a Save / Delete / Join reflection that explicitly considers cross-win patterns.
-- save: what to keep doing or repeat from THIS win in light of prior wins.
-- delete: what to drop, given what other wins have shown.
-- join: what to combine with another specific prior win for compounding effect (reference its name when useful).
-Each value must be 1–3 sentences, concrete, and non-generic.
+Given a leader's captured win, produce a Save / Delete / Join reflection grounded in the actual answers.
+- save: ONE specific practice, decision, or behavior from THIS win that the business should keep and repeat going forward. Name it concretely — do not describe it generically.
+- delete: ONE specific friction, mistake, or obstacle from THIS win that should NOT be repeated in a similar strategy. Name what it was — do not use abstract language.
+- join: ONE specific adjacent initiative, team, or opportunity that could be combined with this win's approach to improve future results. Be specific about what to combine and why.
+Each value must be exactly 1 sentence drawn directly from the captured answers. Never use generic filler like "the decisions that drove this win."
 Return JSON only — no prose, no code fences. Shape: {"save": string, "delete": string, "join": string}.`;
 
 type LlmMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -57,20 +55,32 @@ function tryParseSdj(text: string): Sdj | null {
   return null;
 }
 
-function serializeWin(w: StoredWin & { playbook: WinPlaybook }) {
+function hasPlaybook(
+  w: StoredWin,
+): w is StoredWin & { playbook: WinPlaybook } {
+  return Boolean(w.playbook);
+}
+
+function serializeFocalWin(w: StoredWin): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    id: w.id,
+    name: w.name,
+    answers: w.answers,
+  };
+  if (hasPlaybook(w)) {
+    base.summaries = w.playbook.summaries;
+    base.repeatableRule = w.playbook.repeatableRule;
+  }
+  return base;
+}
+
+function serializeOtherWin(w: StoredWin & { playbook: WinPlaybook }) {
   return {
     id: w.id,
     name: w.name,
     summaries: w.playbook.summaries,
     repeatableRule: w.playbook.repeatableRule,
-    sdj: w.playbook.sdj,
   };
-}
-
-function hasPlaybook(
-  w: StoredWin,
-): w is StoredWin & { playbook: WinPlaybook } {
-  return Boolean(w.playbook);
 }
 
 export async function POST(
@@ -86,9 +96,13 @@ export async function POST(
   if (!focal) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  if (!isFinalized(focal) || !hasPlaybook(focal)) {
+
+  const hasAnyAnswers = Object.values(focal.answers).some(
+    (v) => Array.isArray(v) && v.some(Boolean),
+  );
+  if (!hasAnyAnswers) {
     return Response.json(
-      { error: "Win is still a draft — finish capturing it first." },
+      { error: "No answers captured yet — nothing to summarise." },
       { status: 409 },
     );
   }
@@ -98,8 +112,8 @@ export async function POST(
 
   const userPrompt = JSON.stringify(
     {
-      focalWin: serializeWin(focal),
-      priorWins: others.map(serializeWin),
+      focalWin: serializeFocalWin(focal),
+      priorWins: others.map(serializeOtherWin),
     },
     null,
     2,
@@ -122,8 +136,11 @@ export async function POST(
 
     return Response.json({ sdj, source: "ai", generatedAt });
   } catch {
+    const fallbackSdj: Sdj = hasPlaybook(focal)
+      ? focal.playbook.sdj
+      : { save: "", delete: "", join: "" };
     return Response.json({
-      sdj: focal.playbook.sdj,
+      sdj: fallbackSdj,
       source: "fallback",
       generatedAt: focal.createdAt,
     });

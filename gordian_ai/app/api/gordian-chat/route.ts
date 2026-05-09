@@ -13,7 +13,7 @@ const LOCAL_LLM_URL =
 const ASK_SYSTEM = `You are Gordian, an Executive Winning System (EWS) leadership coach.
 Answer using the captured wins corpus below. Cite wins by id (e.g. WIN-001) when relevant.
 If the corpus lacks enough info, say so plainly instead of inventing.
-HARD LIMITS: 2-4 short sentences, max 60 words. Stop as soon as the question is answered.
+HARD LIMITS: 1-3 short sentences, max 40 words. Stop as soon as the question is answered.
 Plain prose only (no I, me, myself). No markdown: no asterisks, underscores, headers, bullets, numbered lists, or code fences.`;
 
 function compactWin(w: StoredWin): Record<string, unknown> {
@@ -116,6 +116,11 @@ export async function POST(request: NextRequest) {
     const data = await upstream.json();
     if (typeof data.answer === "string") {
       data.answer = stripMarkdown(data.answer);
+      const words = data.answer.split(/\s+/);
+      if (words.length > 50) {
+        const truncated = words.slice(0, 50).join(" ").replace(/[,;:\-]+$/, "");
+        data.answer = /[.!?]$/.test(truncated) ? truncated : truncated + ".";
+      }
     }
     return Response.json(data);
   } catch {

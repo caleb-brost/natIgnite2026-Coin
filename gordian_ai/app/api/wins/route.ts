@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import {
-  isFinalized,
   listWins,
   nextWinId,
   saveWin,
@@ -47,11 +46,9 @@ function isValidPlaybook(p: unknown): p is WinPlaybook {
   );
 }
 
-export async function GET(request: NextRequest) {
-  const includeDrafts = request.nextUrl.searchParams.get("drafts") === "1";
+export async function GET(_request: NextRequest) {
   const all = await listWins();
-  const wins = includeDrafts ? all : all.filter(isFinalized);
-  return Response.json(wins);
+  return Response.json(all);
 }
 
 export async function POST(request: NextRequest) {

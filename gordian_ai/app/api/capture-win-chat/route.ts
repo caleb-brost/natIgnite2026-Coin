@@ -480,7 +480,10 @@ async function generatePlaybook(
     `  }\n` +
     `}\n` +
     `Each summary array: 2-4 short bullets. ` +
-    `answerTitles must have ONE 1-6 word headline per answer in the SAME order as the answers above. ` +
+    `answerTitles: for each answer, write ONE concise 2-5 word label that names the core idea — ` +
+    `think "Client Retention Goal" not "Our goal was to". ` +
+    `Do NOT copy the first words of the answer; distill the essential concept into a meaningful noun phrase. ` +
+    `One title per answer, same order as the answers above. ` +
     `Return JSON only.`;
 
   const raw = await callLLM([
@@ -525,6 +528,14 @@ async function generatePlaybook(
   };
 }
 
+// Stop-words to skip when picking meaningful words for a fallback title.
+const STOP_WORDS = new Set([
+  "a","an","the","and","or","but","of","in","on","at","to","for","with",
+  "we","our","my","i","it","is","was","were","had","have","has","be","been",
+  "that","this","what","which","who","how","why","when","their","they",
+  "he","she","its","by","as","from","so","if","up","did","do","does","are",
+]);
+
 function deriveTitlesFallback(
   answers: Answers,
 ): Record<SectionId, string[]> {
@@ -538,10 +549,18 @@ function deriveTitlesFallback(
   (Object.keys(out) as SectionId[]).forEach((k) => {
     out[k] = (answers[k] ?? []).map((body) => {
       const clean = (body || "").replace(/\s+/g, " ").trim();
+      // Pick up to 4 content-bearing words, skipping stop-words.
+      const meaningful = clean
+        .split(" ")
+        .map((w) => w.replace(/[^a-zA-Z0-9'-]/g, ""))
+        .filter((w) => w.length > 1 && !STOP_WORDS.has(w.toLowerCase()))
+        .slice(0, 4);
+      if (meaningful.length >= 2) return meaningful.join(" ");
+      // Last resort: first 5 words of the raw answer.
       const words = clean.split(" ");
-      return words.length <= 6
+      return words.length <= 5
         ? clean.replace(/[.!?,;:]+$/, "")
-        : words.slice(0, 6).join(" ").replace(/[.!?,;:]+$/, "") + "…";
+        : words.slice(0, 5).join(" ").replace(/[.!?,;:]+$/, "") + "…";
     });
   });
   return out;

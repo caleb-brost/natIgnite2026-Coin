@@ -1911,7 +1911,7 @@ type CaptureChatResponse = {
   process?: CaptureProcessResult;
 };
 
-const QUESTIONS_PER_SECTION = 4;
+const QUESTIONS_PER_SECTION = 1;
 
 async function callCaptureChat(
   req: CaptureChatRequest,
@@ -1958,7 +1958,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
   const [typing, setTyping] = React.useState(false);
   const [input, setInput] = React.useState("");
   const [complete, setComplete] = React.useState(false);
-  const [playbook, setPlaybook] = React.useState<Playbook | null>(null);
+  const [playbookStarted, setPlaybookStarted] = React.useState(false);
   const [savedWinId, setSavedWinId] = React.useState<string | null>(null);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -2308,7 +2308,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
     setCurrentQuestion("");
     setMessages([]);
     setComplete(false);
-    setPlaybook(null);
+    setPlaybookStarted(false);
     setSavedWinId(null);
     setSaveError(null);
     setInput("");
@@ -2326,6 +2326,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
 
   const generate = async () => {
     if (typing) return;
+    setPlaybookStarted(true);
     setTyping(true);
     try {
       const res = await callCaptureChat({
@@ -2344,19 +2345,9 @@ function Capture({ navigate }: { navigate: NavFn }) {
         mode: "generate_playbook",
       });
       if (res.playbook) {
-        setPlaybook(res.playbook);
-        setMessages((m) => [
-          ...m,
-          { role: "bot", text: res.assistantMessage, kind: "cta" },
-        ]);
-        setTimeout(() => {
-          const el = document.getElementById("playbook-card");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 100);
-
-        // Finalize the draft win (created when the user typed the win name).
-        if (savedWinId) {
-          void patchWin(savedWinId, {
+        let winId = savedWinId;
+        if (winId) {
+          await patchWin(winId, {
             answers,
             questions: questionsAsked,
             answerTitles: res.answerTitles,
@@ -2377,7 +2368,8 @@ function Capture({ navigate }: { navigate: NavFn }) {
             });
             if (!saveRes.ok) throw new Error(`Save failed (${saveRes.status})`);
             const saved = (await saveRes.json()) as { id: string };
-            setSavedWinId(saved.id);
+            winId = saved.id;
+            setSavedWinId(winId);
             setSaveError(null);
           } catch (err) {
             setSaveError(
@@ -2385,6 +2377,8 @@ function Capture({ navigate }: { navigate: NavFn }) {
             );
           }
         }
+        setTyping(false);
+        if (winId) navigate("win-summary", winId);
       } else {
         handleApiError("");
       }
@@ -2434,6 +2428,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
         states={stepperState}
         qIdx={qIdx}
         complete={complete}
+        questionsPerSection={QUESTIONS_PER_SECTION}
       />
 
       <div className="grid lg:grid-cols-3 gap-5 mt-6">
@@ -2450,7 +2445,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
             currentSection={currentSection}
             complete={complete}
             onGenerate={generate}
-            playbookOpen={!!playbook}
+            playbookOpen={playbookStarted}
             winName={winName}
           />
         </div>
@@ -2459,21 +2454,11 @@ function Capture({ navigate }: { navigate: NavFn }) {
             answers={answers}
             sectionIdx={sectionIdx}
             complete={complete}
+            questionsPerSection={QUESTIONS_PER_SECTION}
           />
         </div>
       </div>
 
-      {playbook && (
-        <div id="playbook-card" className="mt-10 anim-in">
-          <PlaybookSummaryCard
-            playbook={playbook}
-            navigate={navigate}
-            onReset={reset}
-            savedWinId={savedWinId}
-            saveError={saveError}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -2489,10 +2474,12 @@ function ProgressStepper({
   states,
   qIdx,
   complete,
+  questionsPerSection,
 }: {
   states: ("done" | "active" | "upcoming")[];
   qIdx: number;
   complete: boolean;
+  questionsPerSection: number;
 }) {
   return (
     <div className="card p-4 sm:p-5">
@@ -2545,7 +2532,7 @@ function ProgressStepper({
                 {isActive && !complete && (
                   <span className="hidden md:flex items-center gap-1.5 ml-2 text-[11px] font-mono text-gold-700">
                     <span className="w-1 h-1 rounded-full bg-gold-500 pulse-dot" />
-                    Q{qIdx + 1}/{s.questions.length}
+                    Q{qIdx + 1}/{questionsPerSection}
                   </span>
                 )}
               </div>
@@ -2802,10 +2789,12 @@ function CapturedSoFarPanel({
   answers,
   sectionIdx,
   complete,
+  questionsPerSection,
 }: {
   answers: Answers;
   sectionIdx: number;
   complete: boolean;
+  questionsPerSection: number;
 }) {
   return (
     <div className="card p-5 sticky top-20">
@@ -2831,7 +2820,7 @@ function CapturedSoFarPanel({
         {EWS_SECTIONS.map((s, i) => {
           const arr = answers[s.id] || [];
           const filled = arr.filter(Boolean).length;
-          const total = s.questions.length;
+          const total = questionsPerSection;
           const isActive = !complete && sectionIdx === i;
           const isDone = complete || sectionIdx > i;
 
@@ -2891,202 +2880,3 @@ function CapturedSoFarPanel({
   );
 }
 
-function PlaybookSummaryCard({
-  playbook,
-  navigate,
-  onReset,
-  savedWinId,
-  saveError,
-}: {
-  playbook: Playbook;
-  navigate: NavFn;
-  onReset: () => void;
-  savedWinId: string | null;
-  saveError: string | null;
-}) {
-  const sections: { id: SectionId; label: string }[] = [
-    { id: "strategy", label: "Strategy Summary" },
-    { id: "workPlan", label: "Work Plan Summary" },
-    { id: "people", label: "People Summary" },
-    { id: "operations", label: "Operations Summary" },
-    { id: "results", label: "Results Summary" },
-  ];
-  return (
-    <div className="card overflow-hidden">
-      <div className="p-6 sm:p-8 knot-bg text-paper">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="w-2 h-2 rounded-full bg-gold-400 pulse-dot" />
-          <span className="text-[11px] font-mono uppercase tracking-wider text-gold-300">
-            Executive Winning System Playbook
-          </span>
-        </div>
-        <h2 className="font-serif text-3xl sm:text-4xl leading-tight">
-          {playbook.name}
-        </h2>
-        <p className="text-paper/70 text-sm mt-2">
-          Compiled from your Strategy, Work Plan, People, Operations, and
-          Results.
-        </p>
-      </div>
-
-      <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate2-100">
-        <div className="p-6 sm:p-8 space-y-5">
-          {sections.map((sec, i) => (
-            <div key={sec.id}>
-              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-gold-700 mb-2 flex items-center gap-2">
-                {String(i + 1).padStart(2, "0")} · {sec.label}
-                <span className="h-px flex-1 bg-gold-100" />
-              </div>
-              {playbook.summaries[sec.id] && playbook.summaries[sec.id].length ? (
-                <ul className="space-y-1.5">
-                  {playbook.summaries[sec.id].map((line, j) => (
-                    <li
-                      key={j}
-                      className="text-navy-900 text-sm leading-relaxed flex gap-2"
-                    >
-                      <span className="text-gold-500 mt-1">•</span>
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-sm text-slate2-400 italic">
-                  — not captured —
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="p-6 sm:p-8 space-y-6 bg-ivory/50">
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-gold-700 mb-2">
-              Repeatable Rule
-            </div>
-            <p className="font-serif italic text-2xl text-navy-900 leading-snug">
-              &quot;{playbook.repeatableRule}&quot;
-            </p>
-          </div>
-
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-2">
-              Suggested Next Win
-            </div>
-            <p className="text-navy-900 text-sm leading-relaxed">
-              {playbook.suggestedNextWin}
-            </p>
-          </div>
-
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-3">
-              Save / Delete / Join Reflection
-            </div>
-            <div className="space-y-2.5">
-              <SDJItem
-                letter="S"
-                label="Save"
-                tone="emerald"
-                text={playbook.sdj.save}
-                hint="What should the organization keep from this win?"
-              />
-              <SDJItem
-                letter="D"
-                label="Delete"
-                tone="red"
-                text={playbook.sdj.delete}
-                hint="What should the organization avoid next time?"
-              />
-              <SDJItem
-                letter="J"
-                label="Join"
-                tone="gold"
-                text={playbook.sdj.join}
-                hint="What could be combined with another win to create future success?"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-6 sm:px-8 py-5 bg-white border-t border-slate2-100 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-xs text-slate2-500 flex items-center gap-3 flex-wrap">
-          <span className="flex items-center gap-1.5">
-            <IconShield size={12} /> Visible to your role group
-          </span>
-          <span className="hairline w-px h-3" />
-          {savedWinId ? (
-            <span className="flex items-center gap-1.5">
-              <IconCheck size={12} className="text-emerald-600" />
-              Saved as {savedWinId}
-            </span>
-          ) : saveError ? (
-            <span className="flex items-center gap-1.5 text-red-700">
-              Couldn&apos;t save: {saveError}
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5">
-              <IconCheck size={12} className="text-emerald-600" /> Ready to share
-            </span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-ghost" onClick={onReset}>
-            <IconReplay size={14} /> Build another
-          </button>
-          {savedWinId ? (
-            <button
-              className="btn-ghost"
-              onClick={() => navigate("win-summary", savedWinId)}
-            >
-              View this win <IconArrow size={14} />
-            </button>
-          ) : (
-            <button className="btn-ghost" onClick={() => navigate("replay")}>
-              <IconReplay size={14} /> Replay this
-            </button>
-          )}
-          <button className="btn-gold" onClick={() => navigate("ask")}>
-            Coach a teammate <IconArrow size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SDJItem({
-  letter,
-  label,
-  tone,
-  text,
-  hint,
-}: {
-  letter: string;
-  label: string;
-  tone: "emerald" | "red" | "gold";
-  text: string;
-  hint: string;
-}) {
-  const toneCls = {
-    emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    red: "bg-red-100 text-red-700 border-red-200",
-    gold: "bg-gold-100 text-gold-700 border-gold-200",
-  }[tone];
-  return (
-    <div className="flex gap-3">
-      <div
-        className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-mono font-medium border ${toneCls} shrink-0`}
-      >
-        {letter}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-navy-900">
-          {label} <span className="text-slate2-400 font-normal">— {hint}</span>
-        </div>
-        <div className="text-sm text-slate2-700 leading-relaxed mt-0.5">
-          {text}
-        </div>
-      </div>
-    </div>
-  );
-}

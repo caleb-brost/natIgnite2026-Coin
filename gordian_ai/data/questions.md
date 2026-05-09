@@ -1,7 +1,7 @@
 # Capture-A-Win Question Pool
 
 Each section below lists candidate questions for the Gordian AI capture flow.
-The AI is expected to ask roughly 4 questions per section but may pick, adapt,
+The AI is expected to ask some questions per section but may pick, adapt,
 or reorder based on the user's win type and prior answers. The first question
 in each section is the "anchor" — start there. Treat the rest as a menu, not
 a checklist. Combine or rephrase when an answer already covers a topic.

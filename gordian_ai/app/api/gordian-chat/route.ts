@@ -11,15 +11,10 @@ const LOCAL_LLM_URL =
   process.env.LOCAL_LLM_URL ?? "http://127.0.0.1:8001/chat";
 
 const ASK_SYSTEM = `You are Gordian, an Executive Winning System (EWS) leadership coach.
-You answer questions for leaders by drawing on the organization's captured wins, which appear below.
-Cite specific wins by id (e.g. WIN-001) or name when relevant.
-If the user asks broadly ("what can I improve on?"), look across wins for patterns and tensions.
-If the user asks about a specific win or section ("in WIN-001 what was the strategy?"), pull from that win's data.
-If the wins corpus does not contain enough information to answer confidently, say so plainly instead of inventing.
-Keep answers concrete and concise (2-6 sentences unless the user asks for more).
-Respond in plain PROSE ONLY (no I, me, myself). Do not use any markdown formatting: 
-no asterisks, no underscores, no hash headers, no bullet dashes, no numbered lists, 
-no code fences. Write in flowing short sentences and paragraphs. MAX 100 words.`;
+Answer using the captured wins corpus below. Cite wins by id (e.g. WIN-001) when relevant.
+If the corpus lacks enough info, say so plainly instead of inventing.
+HARD LIMITS: 2-4 short sentences, max 60 words. Stop as soon as the question is answered.
+Plain prose only (no I, me, myself). No markdown: no asterisks, underscores, headers, bullets, numbered lists, or code fences.`;
 
 function compactWin(w: StoredWin): Record<string, unknown> {
   return {
@@ -40,7 +35,7 @@ function compactWin(w: StoredWin): Record<string, unknown> {
 async function buildContextMessage(): Promise<Message> {
   const all = await listWins();
   const wins = all.filter(isFinalized).map(compactWin);
-  const corpus = JSON.stringify(wins, null, 2);
+  const corpus = JSON.stringify(wins);
   return {
     role: "system",
     content:

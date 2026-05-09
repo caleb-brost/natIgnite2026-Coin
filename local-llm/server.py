@@ -54,7 +54,7 @@ print(f"[gordian] loading {model_path}")
 # n_threads/n_ctx kept modest for fast first-token latency.
 llm = Llama(
     model_path=str(model_path),
-    n_ctx=int(os.environ.get("GORDIAN_N_CTX", "2048")),
+    n_ctx=int(os.environ.get("GORDIAN_N_CTX", "8192")),
     n_gpu_layers=int(os.environ.get("GORDIAN_N_GPU_LAYERS", "-1")),
     n_threads=int(os.environ.get("GORDIAN_N_THREADS", "0")) or None,
     verbose=False,

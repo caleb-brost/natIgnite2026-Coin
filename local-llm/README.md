@@ -44,7 +44,7 @@ The server listens at `http://127.0.0.1:8001/chat`.
 | `GORDIAN_MODEL_DIR` | `<repo>/.local-models/smollm3-3b` | Where the GGUF file is downloaded / loaded from |
 | `GORDIAN_GGUF_REPO` | `bartowski/SmolLM3-3B-GGUF` | HF repo to download from |
 | `GORDIAN_GGUF_FILE` | `SmolLM3-3B-Q4_K_M.gguf` | Specific quant file (try `Q5_K_M` for higher quality, `Q3_K_M` for more speed) |
-| `GORDIAN_N_CTX` | `2048` | Context window |
+| `GORDIAN_N_CTX` | `8192` | Context window |
 | `GORDIAN_N_GPU_LAYERS` | `-1` | Layers offloaded to GPU (`-1` = all) |
 | `GORDIAN_N_THREADS` | auto | CPU threads |
 | `GORDIAN_MAX_TOKENS` | `256` | Max generated tokens per reply |

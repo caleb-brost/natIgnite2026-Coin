@@ -1501,69 +1501,210 @@ function AskTyping() {
 // Replay
 // =====================================================================
 
-function Replay({ navigate }: { navigate: NavFn }) {
-  const options = [
-    {
-      id: "A",
-      text: "Apologize and immediately promise a new deadline",
-      why: "Promising before alignment risks repeating the same trust break.",
-    },
-    {
-      id: "B",
-      text: "Meet internally to clarify the issue, assign owners, and confirm a realistic plan",
-      best: true,
-      why: "Matches the original win — alignment first, then external promises.",
-    },
-    {
-      id: "C",
-      text: "Offer a discount before discussing the root problem",
-      why: "Discounts treat the symptom, not the trust gap.",
-    },
-    {
-      id: "D",
-      text: "Wait until the client follows up again",
-      why: "Silence often deepens churn risk in this pattern.",
-    },
-  ] as const;
+type ReplayOptionId = "A" | "B" | "C" | "D";
+type ReplayOption = {
+  id: ReplayOptionId;
+  text: string;
+  isCorrect: boolean;
+  why: string;
+};
+type ReplayScenario = {
+  id: string;
+  sourceWinId: string;
+  sourceWinName: string;
+  title: string;
+  category: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+  prompt: string;
+  question: string;
+  options: ReplayOption[];
+  repeatableRule: string;
+};
+type ReplayScenariosResponse = { scenarios: ReplayScenario[] };
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function Replay({ navigate }: { navigate: NavFn }) {
+  const [scenarios, setScenarios] = React.useState<ReplayScenario[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = React.useState(0);
   const [picked, setPicked] = React.useState<string | null>(null);
   const [showFeedback, setShowFeedback] = React.useState(false);
+  const [completed, setCompleted] = React.useState(false);
+  const [reloadToken, setReloadToken] = React.useState(0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setCurrentIndex(0);
+    setPicked(null);
+    setShowFeedback(false);
+    setCompleted(false);
+    fetch("/api/replay-scenarios", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()) as ReplayScenariosResponse;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setScenarios(Array.isArray(data?.scenarios) ? data.scenarios : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Could not load Decision Replay scenarios.");
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
+
+  const scenario = scenarios[currentIndex];
+  const correctOption = scenario?.options.find((o) => o.isCorrect) ?? null;
+  const pickedOption = scenario?.options.find((o) => o.id === picked) ?? null;
+  const correct = Boolean(pickedOption?.isCorrect);
+  const total = scenarios.length;
+  const isLast = total > 0 && currentIndex >= total - 1;
 
   const submit = () => {
     if (!picked) return;
     setShowFeedback(true);
   };
-  const reset = () => {
+  const goNext = () => {
+    if (isLast) {
+      setCompleted(true);
+      return;
+    }
+    setCurrentIndex((i) => i + 1);
     setPicked(null);
     setShowFeedback(false);
   };
-  const correct = picked === "B";
+  const practiceAgain = () => setReloadToken((t) => t + 1);
 
-  return (
-    <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-        <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1">
-            Practice mode
-          </div>
-          <h1 className="font-serif text-4xl text-navy-900 leading-tight">
-            Decision Replay
-          </h1>
-          <p className="text-slate2-500 mt-1 text-sm max-w-xl">
-            Rehearse a real decision before you have to make it for real.
-            Scenarios are generated from your org&apos;s wins.
-          </p>
+  const header = (
+    <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+      <div>
+        <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1">
+          Practice mode
         </div>
+        <h1 className="font-serif text-4xl text-navy-900 leading-tight">
+          Decision Replay
+        </h1>
+        <p className="text-slate2-500 mt-1 text-sm max-w-xl">
+          Rehearse a real decision before you have to make it for real.
+          Scenarios are generated from your org&apos;s wins.
+        </p>
+      </div>
+      {scenario && !completed && (
         <div className="flex gap-2">
           <span className="chip">
             Difficulty:{" "}
-            <span className="text-navy-900 font-medium ml-1">Medium</span>
+            <span className="text-navy-900 font-medium ml-1">
+              {scenario.difficulty}
+            </span>
           </span>
           <span className="chip">
-            <IconBolt size={12} className="text-gold-500" /> Based on WIN-012
+            <IconBolt size={12} className="text-gold-500" /> Based on{" "}
+            {scenario.sourceWinId}
           </span>
         </div>
+      )}
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center text-slate2-500">
+          Generating scenarios from your captured wins…
+        </div>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center">
+          <h3 className="font-medium text-navy-900">{error}</h3>
+          <p className="text-sm text-slate2-500 mt-2">
+            Something went wrong reaching the scenario generator.
+          </p>
+          <div className="mt-5 flex justify-center gap-2">
+            <button className="btn-primary" onClick={practiceAgain}>
+              Retry <IconArrow size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (total === 0) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center">
+          <h3 className="font-medium text-navy-900">
+            No wins found yet.
+          </h3>
+          <p className="text-sm text-slate2-500 mt-2">
+            Capture a win first to generate Decision Replay scenarios.
+          </p>
+          <div className="mt-5 flex justify-center gap-2">
+            <button className="btn-primary" onClick={() => navigate("capture")}>
+              Capture a win <IconArrow size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (completed) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center">
+          <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white mx-auto flex items-center justify-center">
+            <IconCheck size={22} />
+          </div>
+          <h3 className="font-medium text-navy-900 mt-4">Replay complete.</h3>
+          <p className="text-sm text-slate2-500 mt-2">
+            You practiced {total} decision{" "}
+            {total === 1 ? "scenario" : "scenarios"} generated from your
+            captured wins.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button className="btn-primary" onClick={practiceAgain}>
+              Practice again <IconArrow size={14} />
+            </button>
+            <button className="btn-ghost" onClick={() => navigate("capture")}>
+              Capture another win
+            </button>
+            <button className="btn-gold" onClick={() => navigate("ask")}>
+              Ask Gordian to coach me <IconArrow size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Scenario is guaranteed defined here.
+  if (!scenario) return null;
+  const upcoming = scenarios.slice(currentIndex + 1);
+
+  return (
+    <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+      {header}
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 card overflow-hidden">
@@ -1573,17 +1714,21 @@ function Replay({ navigate }: { navigate: NavFn }) {
                 <IconReplay size={16} />
               </span>
               <div>
-                <h2 className="font-medium text-navy-900">Scenario 01 of 03</h2>
+                <h2 className="font-medium text-navy-900">
+                  Scenario {pad2(currentIndex + 1)} of {pad2(total)}
+                </h2>
                 <p className="text-xs text-slate2-400">
-                  Client Success · Account at risk
+                  {scenario.category} · {scenario.sourceWinName}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {[0, 1, 2].map((i) => (
+              {scenarios.map((_, i) => (
                 <span
                   key={i}
-                  className={`w-6 h-1 rounded-full ${i === 0 ? "bg-gold-400" : "bg-slate2-200"}`}
+                  className={`w-6 h-1 rounded-full ${
+                    i === currentIndex ? "bg-gold-400" : "bg-slate2-200"
+                  }`}
                 />
               ))}
             </div>
@@ -1591,20 +1736,17 @@ function Replay({ navigate }: { navigate: NavFn }) {
 
           <div className="px-6 sm:px-8 py-7">
             <p className="font-serif text-2xl text-navy-900 leading-snug">
-              &quot;A client is frustrated because your team missed a milestone.
-              The account lead wants to quickly promise a new deadline, but the
-              operations team is unsure if that deadline is realistic.
+              &quot;{scenario.prompt}
               <br />
-              <span className="text-gold-700">What should you do first?</span>
+              <span className="text-gold-700">{scenario.question}</span>
               &quot;
             </p>
 
             <div className="mt-7 space-y-2.5">
-              {options.map((opt) => {
+              {scenario.options.map((opt) => {
                 const isPicked = picked === opt.id;
-                const isCorrect = showFeedback && "best" in opt && opt.best;
-                const isWrong =
-                  showFeedback && isPicked && !("best" in opt && opt.best);
+                const isCorrect = showFeedback && opt.isCorrect;
+                const isWrong = showFeedback && isPicked && !opt.isCorrect;
                 return (
                   <button
                     key={opt.id}
@@ -1660,8 +1802,8 @@ function Replay({ navigate }: { navigate: NavFn }) {
 
             <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-xs text-slate2-400 flex items-center gap-2">
-                <IconHelp size={12} /> Choose the action that protects trust
-                first.
+                <IconHelp size={12} /> Choose the action that best repeats the
+                successful pattern.
               </div>
               {!showFeedback ? (
                 <button
@@ -1673,14 +1815,12 @@ function Replay({ navigate }: { navigate: NavFn }) {
                 </button>
               ) : (
                 <div className="flex gap-2">
-                  <button className="btn-ghost" onClick={reset}>
-                    Try again
+                  <button className="btn-ghost" onClick={() => navigate("ask")}>
+                    Ask Gordian to coach me
                   </button>
-                  <button
-                    className="btn-gold"
-                    onClick={() => navigate("ask")}
-                  >
-                    Ask Gordian to coach me <IconArrow size={14} />
+                  <button className="btn-gold" onClick={goNext}>
+                    {isLast ? "Finish replay" : "Next scenario"}{" "}
+                    <IconArrow size={14} />
                   </button>
                 </div>
               )}
@@ -1701,15 +1841,22 @@ function Replay({ navigate }: { navigate: NavFn }) {
                   <h3 className="font-medium text-navy-900">
                     {correct ? "Correct." : "Worth a re-read."}
                   </h3>
-                  <p className="text-sm text-navy-900/80 mt-1.5 leading-relaxed">
-                    In the original win, the successful leader first aligned the
-                    internal team before making external promises. This
-                    protected trust, reduced confusion, and created a clear
-                    recovery plan.
-                  </p>
+                  {pickedOption && !correct && (
+                    <p className="text-sm text-navy-900/80 mt-1.5 leading-relaxed">
+                      <span className="font-medium">Your pick:</span>{" "}
+                      {pickedOption.why}
+                    </p>
+                  )}
+                  {correctOption && (
+                    <p className="text-sm text-navy-900/80 mt-1.5 leading-relaxed">
+                      <span className="font-medium">Best action:</span>{" "}
+                      {correctOption.why}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     <span className="chip chip-gold">
-                      <IconDoc size={11} /> Source: WIN-012
+                      <IconDoc size={11} /> Source: {scenario.sourceWinId} ·{" "}
+                      {scenario.sourceWinName}
                     </span>
                     <span className="chip">Repeatable Rule applied</span>
                   </div>
@@ -1734,33 +1881,40 @@ function Replay({ navigate }: { navigate: NavFn }) {
             <h4 className="font-medium text-navy-900 flex items-center gap-2">
               <IconFlag size={14} /> Up next
             </h4>
-            <ul className="mt-3 space-y-3">
-              {(
-                [
-                  ["02", "Reframing a stalled partnership", "Sales · Leadership"],
-                  ["03", "Recovering after a missed handoff", "Operations"],
-                ] as [string, string, string][]
-              ).map(([n, t, m]) => (
-                <li key={n} className="flex items-center gap-3">
-                  <span className="text-[11px] font-mono text-slate2-400">
-                    {n}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-navy-900 truncate">{t}</div>
-                    <div className="text-xs text-slate2-400">{m}</div>
-                  </div>
-                  <IconChevR size={14} className="text-slate2-300" />
-                </li>
-              ))}
-            </ul>
+            {upcoming.length === 0 ? (
+              <p className="mt-3 text-sm text-slate2-400">
+                No more scenarios in this replay.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {upcoming.map((s, i) => (
+                  <li key={s.id} className="flex items-center gap-3">
+                    <span className="text-[11px] font-mono text-slate2-400">
+                      {pad2(currentIndex + 2 + i)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-navy-900 truncate">
+                        {s.title}
+                      </div>
+                      <div className="text-xs text-slate2-400 truncate">
+                        {s.category} · {s.sourceWinId}
+                      </div>
+                    </div>
+                    <IconChevR size={14} className="text-slate2-300" />
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="card p-5 knot-bg text-paper">
             <div className="text-[11px] font-mono uppercase tracking-wider text-gold-300 mb-2">
-              Your streak
+              Your progress
             </div>
-            <div className="font-serif text-4xl">7 days</div>
+            <div className="font-serif text-4xl">
+              {currentIndex + (showFeedback ? 1 : 0)}/{total}
+            </div>
             <p className="text-sm text-slate2-200/80 mt-2">
-              5 scenarios completed · avg confidence +24%
+              Scenarios answered in this replay
             </p>
           </div>
         </div>

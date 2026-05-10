@@ -91,7 +91,7 @@ function Shell({
   const items: { id: View; label: string; icon: React.ReactNode }[] = [
     { id: "home", label: "Home", icon: <IconHome size={16} /> },
     { id: "dashboard", label: "Dashboard", icon: <IconGrid size={16} /> },
-    { id: "wins", label: "All Wins", icon: <IconStar size={16} /> },
+    { id: "wins", label: "Win Jar", icon: <IconStar size={16} /> },
     { id: "capture", label: "Capture a Win", icon: <IconPlus size={16} /> },
     { id: "ask", label: "Ask Gordian", icon: <IconChat size={16} /> },
     { id: "replay", label: "Decision Replay", icon: <IconReplay size={16} /> },
@@ -897,7 +897,7 @@ function AllWins({ navigate }: { navigate: NavFn }) {
             Workspace · Aurora Systems
           </div>
           <h1 className="font-serif text-4xl text-navy-900 leading-tight">
-            All Wins
+            Win Jar
           </h1>
           <p className="text-slate2-500 mt-1 text-sm">
             Every win captured through the Executive Winning System.
@@ -1072,7 +1072,7 @@ function WinSummary({
             className="btn-gold mt-5"
             onClick={() => navigate("wins")}
           >
-            Back to All Wins
+            Back to Win Jar
           </button>
         </div>
       </div>
@@ -1132,7 +1132,7 @@ function WinSummary({
               className="hover:text-navy-900 flex items-center gap-1"
               onClick={() => navigate("wins")}
             >
-              <IconChevR size={10} className="rotate-180" /> All Wins
+              <IconChevR size={10} className="rotate-180" /> Win Jar
             </button>
             <span className="text-slate2-300">·</span>
             <span>{win.id}</span>

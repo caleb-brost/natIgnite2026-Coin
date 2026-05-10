@@ -1334,7 +1334,12 @@ type ChatMsg = {
 };
 
 function Ask() {
-  const [messages, setMessages] = React.useState<ChatMsg[]>([]);
+  const [messages, setMessages] = React.useState<ChatMsg[]>([
+    {
+      role: "assistant",
+      text: "Hi! I'm Gordian — your org's decision intelligence coach. I'm grounded in your team's captured wins and playbooks. Ask me about a stakeholder situation, a stalled deal, a cross-team challenge, or how past decisions were made.",
+    },
+  ]);
   const [typing, setTyping] = React.useState(false);
   const [input, setInput] = React.useState("");
   const scrollRef = React.useRef<HTMLDivElement>(null);

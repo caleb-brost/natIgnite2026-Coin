@@ -116,11 +116,6 @@ export async function POST(request: NextRequest) {
     const data = await upstream.json();
     if (typeof data.answer === "string") {
       data.answer = stripMarkdown(data.answer);
-      const words = data.answer.split(/\s+/);
-      if (words.length > 50) {
-        const truncated = words.slice(0, 50).join(" ").replace(/[,;:\-]+$/, "");
-        data.answer = /[.!?]$/.test(truncated) ? truncated : truncated + ".";
-      }
     }
     return Response.json(data);
   } catch {

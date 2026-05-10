@@ -232,14 +232,6 @@ function FooterCTA({ navigate }: { navigate: NavFn }) {
     <>
       <section className="border-t border-slate2-100 bg-ivory">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-10 py-12 grid md:grid-cols-4 gap-6">
-          <div className="md:col-span-1">
-            <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-2">
-              Privacy & Security
-            </div>
-            <h3 className="font-serif text-2xl text-navy-900 leading-tight">
-              Built for sensitive leadership knowledge.
-            </h3>
-          </div>
           {[
             {
               icon: <IconLock size={16} />,
@@ -262,7 +254,7 @@ function FooterCTA({ navigate }: { navigate: NavFn }) {
               d: "SOC 2 ready · audit logs · SSO + SCIM.",
             },
           ].map((b) => (
-            <div key={b.t} className="flex gap-3">
+            <div key={b.t} className="flex gap-4">
               <div className="w-8 h-8 rounded-lg bg-white border border-slate2-100 text-navy-900 flex items-center justify-center shrink-0">
                 {b.icon}
               </div>

@@ -2124,7 +2124,7 @@ type CaptureChatResponse = {
   process?: CaptureProcessResult;
 };
 
-const QUESTIONS_PER_SECTION = 3;
+const QUESTIONS_PER_SECTION = 1;
 
 async function callCaptureChat(
   req: CaptureChatRequest,

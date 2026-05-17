@@ -29,13 +29,26 @@ import {
   IconFlag,
 } from "./_components/icons";
 
-type View = "home" | "dashboard" | "capture" | "ask" | "replay";
-type NavFn = (v: View) => void;
+type View =
+  | "home"
+  | "dashboard"
+  | "capture"
+  | "ask"
+  | "replay"
+  | "wins"
+  | "win-summary";
+type NavFn = (v: View, winId?: string) => void;
 
 export default function Page() {
   const [view, setView] = React.useState<View>("home");
+  const [selectedWinId, setSelectedWinId] = React.useState<string | null>(null);
 
-  const navigate = (v: View) => {
+  const navigate = (v: View, winId?: string) => {
+    if (v === "win-summary") {
+      if (winId) setSelectedWinId(winId);
+    } else if (v !== "wins") {
+      setSelectedWinId(null);
+    }
     setView(v);
     if (typeof window !== "undefined")
       window.scrollTo({ top: 0, behavior: "instant" });
@@ -47,10 +60,13 @@ export default function Page() {
   if (view === "capture") body = <Capture navigate={navigate} />;
   if (view === "ask") body = <Ask />;
   if (view === "replay") body = <Replay navigate={navigate} />;
+  if (view === "wins") body = <AllWins navigate={navigate} />;
+  if (view === "win-summary" && selectedWinId)
+    body = <WinSummary winId={selectedWinId} navigate={navigate} />;
 
   return (
     <Shell view={view} navigate={navigate}>
-      <div key={view} className="anim-in">
+      <div key={view + (selectedWinId ?? "")} className="anim-in">
         {body}
       </div>
     </Shell>
@@ -75,11 +91,14 @@ function Shell({
   const items: { id: View; label: string; icon: React.ReactNode }[] = [
     { id: "home", label: "Home", icon: <IconHome size={16} /> },
     { id: "dashboard", label: "Dashboard", icon: <IconGrid size={16} /> },
+    { id: "wins", label: "Win Jar", icon: <IconStar size={16} /> },
     { id: "capture", label: "Capture a Win", icon: <IconPlus size={16} /> },
     { id: "ask", label: "Ask Gordian", icon: <IconChat size={16} /> },
     { id: "replay", label: "Decision Replay", icon: <IconReplay size={16} /> },
   ];
-  const activeLabel = items.find((i) => i.id === view)?.label || "Home";
+  const matchView: View = view === "win-summary" ? "wins" : view;
+  const activeLabel =
+    items.find((i) => i.id === matchView)?.label || "Home";
 
   return (
     <div className="min-h-screen flex">
@@ -131,7 +150,7 @@ function Shell({
           {items.map((it) => (
             <button
               key={it.id}
-              className={`nav-item ${view === it.id ? "active" : ""}`}
+              className={`nav-item ${matchView === it.id ? "active" : ""}`}
               onClick={() => {
                 navigate(it.id);
                 setMobileOpen(false);
@@ -185,7 +204,7 @@ function Shell({
             <div className="flex-1" />
             <div className="hidden sm:flex items-center gap-2 px-3 h-9 rounded-lg bg-white border border-slate2-100 w-72 max-w-full text-sm text-slate2-400">
               <IconSearch size={14} />
-              <span className="flex-1">Search wins, playbooks, people…</span>
+              <span className="flex-1">Search</span>
               <span className="kbd">⌘K</span>
             </div>
             <button className="btn-ghost h-9 px-3">
@@ -213,14 +232,6 @@ function FooterCTA({ navigate }: { navigate: NavFn }) {
     <>
       <section className="border-t border-slate2-100 bg-ivory">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-10 py-12 grid md:grid-cols-4 gap-6">
-          <div className="md:col-span-1">
-            <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-2">
-              Privacy & Security
-            </div>
-            <h3 className="font-serif text-2xl text-navy-900 leading-tight">
-              Built for sensitive leadership knowledge.
-            </h3>
-          </div>
           {[
             {
               icon: <IconLock size={16} />,
@@ -243,7 +254,7 @@ function FooterCTA({ navigate }: { navigate: NavFn }) {
               d: "SOC 2 ready · audit logs · SSO + SCIM.",
             },
           ].map((b) => (
-            <div key={b.t} className="flex gap-3">
+            <div key={b.t} className="flex gap-4">
               <div className="w-8 h-8 rounded-lg bg-white border border-slate2-100 text-navy-900 flex items-center justify-center shrink-0">
                 {b.icon}
               </div>
@@ -509,39 +520,19 @@ function DecisionDNAPreview() {
 // =====================================================================
 
 function Dashboard({ navigate }: { navigate: NavFn }) {
+  const { wins, loading } = useWinsList();
+  const recentWins = wins.slice(0, 3);
   const stats = [
-    { k: "Total Wins Captured", v: "12", d: "+3 this month", icon: <IconStar size={16} />, trend: "+33%" },
+    {
+      k: "Total Wins Captured",
+      v: String(wins.length),
+      d: wins.length === 0 ? "Capture your first" : "Stored locally",
+      icon: <IconStar size={16} />,
+      trend: wins.length > 0 ? `+${wins.length}` : "—",
+    },
     { k: "Repeatable Playbooks", v: "8", d: "Across 4 teams", icon: <IconDoc size={16} />, trend: "+2" },
     { k: "Team Questions Answered", v: "47", d: "Past 30 days", icon: <IconChat size={16} />, trend: "+18" },
     { k: "Decision Confidence Increase", v: "32%", d: "Self-reported", icon: <IconTrend size={16} />, trend: "↑" },
-  ];
-
-  const wins = [
-    {
-      id: "WIN-012",
-      t: "Client Recovery Through Fast Alignment",
-      desc: "Aligned the internal team before responding externally to recover a major at-risk account.",
-      tags: ["Client Success", "Leadership"],
-      author: "Maya Okafor",
-      ago: "2d ago",
-      featured: true,
-    },
-    {
-      id: "WIN-011",
-      t: "Improving Team Handoff Process",
-      desc: "Designed a 3-step handoff ritual that cut dropped tasks across engineering and ops.",
-      tags: ["Operations"],
-      author: "Daniel Reyes",
-      ago: "5d ago",
-    },
-    {
-      id: "WIN-010",
-      t: "Closing a High-Value Partnership",
-      desc: "Reframed a stalled partnership conversation around mutual upside and closed in 2 weeks.",
-      tags: ["Sales", "Leadership"],
-      author: "Priya Anand",
-      ago: "1w ago",
-    },
   ];
 
   return (
@@ -610,57 +601,19 @@ function Dashboard({ navigate }: { navigate: NavFn }) {
                 Captured by leaders across the org
               </p>
             </div>
-            <button className="text-xs text-slate2-500 hover:text-navy-900 flex items-center gap-1">
+            <button
+              className="text-xs text-slate2-500 hover:text-navy-900 flex items-center gap-1"
+              onClick={() => navigate("wins")}
+            >
               View all <IconChevR size={12} />
             </button>
           </div>
-          <ul>
-            {wins.map((w) => (
-              <li
-                key={w.id}
-                className="px-5 py-4 border-t border-slate2-100 first:border-t-0 hover:bg-ivory/60 transition-colors cursor-pointer group"
-                onClick={() => navigate("capture")}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-navy-900 text-paper flex items-center justify-center shrink-0 mt-0.5">
-                    <IconKnot size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[10px] text-slate2-400">
-                        {w.id}
-                      </span>
-                      {w.featured && (
-                        <span className="chip chip-gold text-[10px]">
-                          <IconStar size={10} /> Featured
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-navy-900 font-medium mt-1 group-hover:text-gold-700 transition-colors">
-                      {w.t}
-                    </h3>
-                    <p className="text-sm text-slate2-500 mt-1 leading-relaxed">
-                      {w.desc}
-                    </p>
-                    <div className="flex items-center gap-2 mt-3 flex-wrap">
-                      {w.tags.map((t) => (
-                        <span key={t} className="chip">
-                          {t}
-                        </span>
-                      ))}
-                      <span className="text-xs text-slate2-400 ml-auto">
-                        {w.author} · {w.ago}
-                      </span>
-                    </div>
-                  </div>
-                  <IconChevR
-                    size={16}
-                    className="text-slate2-300 mt-2 shrink-0 group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all"
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
+          <WinList
+            wins={recentWins}
+            loading={loading}
+            onSelect={(id) => navigate("win-summary", id)}
+            emptyMessage="No wins captured yet — capture your first win to see it here."
+          />
         </div>
 
         <div className="space-y-4">
@@ -720,6 +673,647 @@ function Dashboard({ navigate }: { navigate: NavFn }) {
 }
 
 // =====================================================================
+// Wins (shared list + AllWins page + WinSummary page)
+// =====================================================================
+
+type StoredSdj = { save: string; delete: string; join: string };
+
+type StoredWin = {
+  id: string;
+  name: string;
+  createdAt: string;
+  author: string;
+  tags: string[];
+  description: string;
+  featured: boolean;
+  answers: { winName: string } & Record<SectionId, string[]>;
+  answerTitles?: Record<SectionId, string[]>;
+  playbook: {
+    name: string;
+    summaries: Record<SectionId, string[]>;
+    repeatableRule: string;
+    suggestedNextWin: string;
+    sdj: StoredSdj;
+  };
+  aiSummary?: { sdj: StoredSdj; generatedAt: string; model?: string };
+};
+
+function deriveTitle(body: string, max = 6): string {
+  const clean = (body || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "Untitled";
+  const words = clean.split(" ");
+  if (words.length <= max) return clean.replace(/[.!?,;:]+$/, "");
+  return words.slice(0, max).join(" ").replace(/[.!?,;:]+$/, "") + "…";
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const diffMs = Date.now() - then;
+  const sec = Math.max(1, Math.round(diffMs / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const wk = Math.round(day / 7);
+  if (wk < 5) return `${wk}w ago`;
+  const mo = Math.round(day / 30);
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.round(day / 365)}y ago`;
+}
+
+function useWinsList() {
+  const [wins, setWins] = React.useState<StoredWin[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/wins", { cache: "no-store" });
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const data = (await res.json()) as StoredWin[];
+        if (alive) setWins(data);
+      } catch (err) {
+        if (alive) setError(err instanceof Error ? err.message : "Failed");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return { wins, loading, error };
+}
+
+function WinList({
+  wins,
+  loading,
+  onSelect,
+  emptyMessage,
+}: {
+  wins: StoredWin[];
+  loading: boolean;
+  onSelect: (id: string) => void;
+  emptyMessage: string;
+}) {
+  if (loading) {
+    return (
+      <ul>
+        {[0, 1, 2].map((i) => (
+          <li
+            key={i}
+            className="px-5 py-4 border-t border-slate2-100 first:border-t-0"
+          >
+            <div className="flex items-start gap-4 animate-pulse">
+              <div className="w-9 h-9 rounded-lg bg-slate2-100 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-20 bg-slate2-100 rounded" />
+                <div className="h-4 w-2/3 bg-slate2-100 rounded" />
+                <div className="h-3 w-full bg-slate2-100 rounded" />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (wins.length === 0) {
+    return (
+      <div className="px-5 py-10 text-center text-sm text-slate2-500">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <ul>
+      {wins.map((w) => (
+        <li
+          key={w.id}
+          className="px-5 py-4 border-t border-slate2-100 first:border-t-0 hover:bg-ivory/60 transition-colors cursor-pointer group"
+          onClick={() => onSelect(w.id)}
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-9 h-9 rounded-lg bg-navy-900 text-paper flex items-center justify-center shrink-0 mt-0.5">
+              <IconKnot size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-[10px] text-slate2-400">
+                  {w.id}
+                </span>
+                {w.featured && (
+                  <span className="chip chip-gold text-[10px]">
+                    <IconStar size={10} /> Featured
+                  </span>
+                )}
+              </div>
+              <h3 className="text-navy-900 font-medium mt-1 group-hover:text-gold-700 transition-colors">
+                {w.name}
+              </h3>
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {(
+                  [
+                    { id: "strategy", label: "Strategy" },
+                    { id: "workPlan", label: "Work Plan" },
+                    { id: "people", label: "People" },
+                    { id: "operations", label: "Operations" },
+                    { id: "results", label: "Results" },
+                  ] as { id: keyof typeof w.answers; label: string }[]
+                ).map((sec) => {
+                  const filled =
+                    Array.isArray(w.answers?.[sec.id]) &&
+                    (w.answers[sec.id] as string[]).some(Boolean);
+                  return (
+                    <span
+                      key={sec.id}
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${filled
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-slate2-50 text-slate2-400 border border-slate2-100"
+                        }`}
+                    >
+                      {filled && <IconCheck size={8} className="inline mr-0.5" />}
+                      {sec.label}
+                    </span>
+                  );
+                })}
+                {w.playbook && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gold-50 text-gold-700 border border-gold-200">
+                    <IconSparkle size={8} className="inline mr-0.5" />
+                    Playbook
+                  </span>
+                )}
+              </div>
+              {w.description && (
+                <p className="text-sm text-slate2-500 mt-1.5 leading-relaxed">
+                  {w.description}
+                </p>
+              )}
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                {w.tags.map((t) => (
+                  <span key={t} className="chip">
+                    {t}
+                  </span>
+                ))}
+                <span className="text-xs text-slate2-400 ml-auto">
+                  {w.author} · {relativeTime(w.createdAt)}
+                </span>
+              </div>
+            </div>
+            <IconChevR
+              size={16}
+              className="text-slate2-300 mt-2 shrink-0 group-hover:text-navy-900 group-hover:translate-x-0.5 transition-all"
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AllWins({ navigate }: { navigate: NavFn }) {
+  const { wins, loading } = useWinsList();
+  return (
+    <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1">
+            Workspace · Aurora Systems
+          </div>
+          <h1 className="font-serif text-4xl text-navy-900 leading-tight">
+            Win Jar
+          </h1>
+          <p className="text-slate2-500 mt-1 text-sm">
+            Every win captured through the Executive Winning System.
+          </p>
+        </div>
+        <div className="flex gap-2.5">
+          <button
+            className="btn-ghost"
+            style={{ padding: "13px 22px", fontSize: 15 }}
+            onClick={() => navigate("dashboard")}
+          >
+            <IconGrid size={16} /> Dashboard
+          </button>
+          <button
+            className="btn-gold"
+            style={{ padding: "13px 22px", fontSize: 15 }}
+            onClick={() => navigate("capture")}
+          >
+            <IconPlus size={16} /> Capture a Win
+          </button>
+        </div>
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate2-100">
+          <div>
+            <h2 className="font-medium text-navy-900">
+              {loading ? "Loading…" : `${wins.length} win${wins.length === 1 ? "" : "s"}`}
+            </h2>
+            <p className="text-xs text-slate2-400 mt-0.5">
+              Sorted by most recent
+            </p>
+          </div>
+        </div>
+        <WinList
+          wins={wins}
+          loading={loading}
+          onSelect={(id) => navigate("win-summary", id)}
+          emptyMessage="No wins captured yet. Capture your first win to populate this list."
+        />
+      </div>
+    </div>
+  );
+}
+
+function WinSummary({
+  winId,
+  navigate,
+}: {
+  winId: string;
+  navigate: NavFn;
+}) {
+  const [win, setWin] = React.useState<StoredWin | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [notFound, setNotFound] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [activeSdj, setActiveSdj] = React.useState<StoredSdj | null>(null);
+  const [sdjSource, setSdjSource] = React.useState<"ai" | "fallback" | "capture">(
+    "capture",
+  );
+  const [sdjGeneratedAt, setSdjGeneratedAt] = React.useState<string | null>(
+    null,
+  );
+
+  React.useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setNotFound(false);
+    (async () => {
+      try {
+        const res = await fetch(`/api/wins/${winId}`, { cache: "no-store" });
+        if (res.status === 404) {
+          if (alive) setNotFound(true);
+          return;
+        }
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const data = (await res.json()) as StoredWin;
+        if (!alive) return;
+        setWin(data);
+        if (data.aiSummary) {
+          setActiveSdj(data.aiSummary.sdj);
+          setSdjSource("ai");
+          setSdjGeneratedAt(data.aiSummary.generatedAt);
+        } else {
+          // No AI summary yet — auto-generate on first view.
+          if (alive) setRefreshing(true);
+          try {
+            const sumRes = await fetch(`/api/wins/${data.id}/summary`, {
+              method: "POST",
+            });
+            if (sumRes.ok) {
+              const sumData = (await sumRes.json()) as {
+                sdj: StoredSdj;
+                source: "ai" | "fallback";
+                generatedAt: string;
+              };
+              if (alive) {
+                setActiveSdj(sumData.sdj);
+                setSdjSource(sumData.source);
+                setSdjGeneratedAt(sumData.generatedAt);
+              }
+            } else if (data.playbook) {
+              if (alive) {
+                setActiveSdj(data.playbook.sdj);
+                setSdjSource("capture");
+                setSdjGeneratedAt(data.createdAt);
+              }
+            }
+          } catch {
+            if (data.playbook && alive) {
+              setActiveSdj(data.playbook.sdj);
+              setSdjSource("capture");
+              setSdjGeneratedAt(data.createdAt);
+            }
+          } finally {
+            if (alive) setRefreshing(false);
+          }
+        }
+      } catch {
+        if (alive) setNotFound(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [winId]);
+
+  const refresh = async () => {
+    if (refreshing || !win) return;
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/wins/${win.id}/summary`, { method: "POST" });
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const data = (await res.json()) as {
+        sdj: StoredSdj;
+        source: "ai" | "fallback";
+        generatedAt: string;
+      };
+      setActiveSdj(data.sdj);
+      setSdjSource(data.source);
+      setSdjGeneratedAt(data.generatedAt);
+    } catch {
+      // No-op: keep current state.
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+        <div className="card p-8 animate-pulse space-y-3">
+          <div className="h-3 w-24 bg-slate2-100 rounded" />
+          <div className="h-8 w-2/3 bg-slate2-100 rounded" />
+          <div className="h-3 w-1/2 bg-slate2-100 rounded" />
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound || !win) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+        <div className="card p-10 text-center">
+          <h2 className="font-serif text-2xl text-navy-900">Win not found</h2>
+          <p className="text-sm text-slate2-500 mt-2">
+            This win may have been removed or never saved.
+          </p>
+          <button
+            className="btn-gold mt-5"
+            onClick={() => navigate("wins")}
+          >
+            Back to Win Jar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const hasAnyAnswers = Object.values(win.answers).some(
+    (v) => Array.isArray(v) && (v as string[]).some(Boolean),
+  );
+  if (!hasAnyAnswers) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+        <div className="card p-10 text-center">
+          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-2">
+            {win.id} · Draft
+          </div>
+          <h2 className="font-serif text-2xl text-navy-900">
+            {win.name || "Untitled win"}
+          </h2>
+          <p className="text-sm text-slate2-500 mt-2">
+            This win has no answers yet. Resume the guided builder to start
+            capturing.
+          </p>
+          <button
+            className="btn-gold mt-5"
+            onClick={() => navigate("capture")}
+          >
+            Resume capture
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const sections: { id: SectionId; label: string }[] = [
+    { id: "strategy", label: "Strategy" },
+    { id: "workPlan", label: "Work Plan" },
+    { id: "people", label: "People" },
+    { id: "operations", label: "Operations" },
+    { id: "results", label: "Results" },
+  ];
+
+  const sourceCaption =
+    sdjSource === "ai"
+      ? `Generated by Gordian AI · ${sdjGeneratedAt ? relativeTime(sdjGeneratedAt) : "just now"
+      }`
+      : sdjSource === "fallback"
+        ? "AI unavailable — showing capture-time summary"
+        : "Showing capture-time summary";
+
+  return (
+    <div className="px-6 sm:px-10 py-8 max-w-[1200px] mx-auto">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1 flex items-center gap-2">
+            <button
+              className="hover:text-navy-900 flex items-center gap-1"
+              onClick={() => navigate("wins")}
+            >
+              <IconChevR size={10} className="rotate-180" /> Win Jar
+            </button>
+            <span className="text-slate2-300">·</span>
+            <span>{win.id}</span>
+          </div>
+          <h1 className="font-serif text-4xl text-navy-900 leading-tight">
+            {win.name}
+          </h1>
+          <p className="text-slate2-500 mt-1 text-sm">
+            {win.author} · captured {relativeTime(win.createdAt)}
+          </p>
+        </div>
+        <div className="flex gap-2.5">
+          <button
+            className="btn-ghost"
+            onClick={() => navigate("capture")}
+          >
+            <IconPlus size={14} /> Capture another
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {sections.map((sec, i) => {
+          const items = win.answers[sec.id] ?? [];
+          const titles = win.answerTitles?.[sec.id] ?? [];
+          const responseCount = items.filter(Boolean).length;
+          return (
+            <details
+              key={sec.id}
+              className="group/section card p-0 overflow-hidden"
+            >
+              <summary className="flex items-center gap-3 px-6 sm:px-7 py-4 cursor-pointer list-none select-none hover:bg-ivory/60 transition-colors">
+                <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-gold-700 shrink-0">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="font-medium text-navy-900">{sec.label}</span>
+                <span className="h-px flex-1 bg-gold-100" />
+                <span className="text-[10px] font-mono text-slate2-400">
+                  {responseCount} response{responseCount === 1 ? "" : "s"}
+                </span>
+                <IconChevR
+                  size={14}
+                  className="text-slate2-400 group-open/section:rotate-90 transition-transform"
+                />
+              </summary>
+
+              <div className="px-6 sm:px-7 pb-6 pt-1">
+                {responseCount === 0 ? (
+                  <div className="text-sm text-slate2-400 italic">
+                    — not captured —
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {items.map((body, j) => {
+                      if (!body) return null;
+                      const title = titles[j]?.trim() || deriveTitle(body);
+                      return (
+                        <li key={j}>
+                          <details className="group/item rounded-lg border border-slate2-100 bg-ivory/40 open:bg-white open:border-slate2-200 transition-colors">
+                            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none">
+                              <span className="font-mono text-[10px] text-slate2-400 w-4">
+                                {String(j + 1).padStart(2, "0")}
+                              </span>
+                              <span className="flex-1 text-sm font-medium text-navy-900">
+                                {title}
+                              </span>
+                              <IconChevR
+                                size={14}
+                                className="text-slate2-400 group-open/item:rotate-90 transition-transform"
+                              />
+                            </summary>
+                            <div className="px-4 pb-4 pt-1 pl-11 text-sm text-slate2-700 leading-relaxed whitespace-pre-line">
+                              {body}
+                            </div>
+                          </details>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </details>
+          );
+        })}
+
+        <div className="card p-6 sm:p-7">
+          <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-2">
+            Repeatable Rule
+          </div>
+          <p className="font-serif italic text-xl text-navy-900 leading-snug">
+            &quot;{win.playbook.repeatableRule}&quot;
+          </p>
+        </div>
+
+        <div className="card p-6 sm:p-8 bg-ivory/50">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-1">
+                Feedback / Recommendations
+              </div>
+              <h2 className="font-serif text-2xl text-navy-900 leading-tight">
+                What to learn from this win
+              </h2>
+              <p className="text-xs text-slate2-500 mt-1">
+                {sourceCaption}
+              </p>
+            </div>
+            <button
+              className="btn-ghost"
+              onClick={refresh}
+              disabled={refreshing}
+            >
+              <IconSparkle size={14} />{" "}
+              {refreshing ? "Refreshing…" : "Refresh summary"}
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate2-100 bg-white">
+            <WsdjRow
+              letter="W"
+              label="Win"
+              tone="navy"
+              text={win.name}
+              hint="Name the win"
+            />
+            <WsdjRow
+              letter="S"
+              label="Save"
+              tone="emerald"
+              text={activeSdj.save}
+              hint="What the business should keep and repeat going forward"
+            />
+            <WsdjRow
+              letter="D"
+              label="Delete"
+              tone="red"
+              text={activeSdj.delete}
+              hint="What should not be repeated in a similar strategy"
+            />
+            <WsdjRow
+              letter="J"
+              label="Join"
+              tone="gold"
+              text={activeSdj.join}
+              hint="What to combine with this approach to improve results"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WsdjRow({
+  letter,
+  label,
+  tone,
+  text,
+  hint,
+}: {
+  letter: string;
+  label: string;
+  tone: "navy" | "emerald" | "red" | "gold";
+  text: string;
+  hint: string;
+}) {
+  const toneCls = {
+    navy: "bg-navy-900 text-paper border-navy-900",
+    emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    red: "bg-red-100 text-red-700 border-red-200",
+    gold: "bg-gold-100 text-gold-700 border-gold-200",
+  }[tone];
+  return (
+    <div className="grid grid-cols-[auto_140px_1fr] gap-4 px-4 sm:px-5 py-4 border-t border-slate2-100 first:border-t-0 items-start">
+      <div
+        className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-mono font-medium border ${toneCls} shrink-0`}
+      >
+        {letter}
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-navy-900">{label}</div>
+        <div className="text-[11px] text-slate2-400 leading-snug">{hint}</div>
+      </div>
+      <div className="text-sm text-slate2-700 leading-relaxed">{text}</div>
+    </div>
+  );
+}
+
+// =====================================================================
 // Ask Gordian
 // =====================================================================
 
@@ -732,7 +1326,12 @@ type ChatMsg = {
 };
 
 function Ask() {
-  const [messages, setMessages] = React.useState<ChatMsg[]>([]);
+  const [messages, setMessages] = React.useState<ChatMsg[]>([
+    {
+      role: "assistant",
+      text: "Hi! I'm Gordian — your org's decision intelligence coach. I'm grounded in your team's captured wins and playbooks. Ask me about a stakeholder situation, a stalled deal, a cross-team challenge, or how past decisions were made.",
+    },
+  ]);
   const [typing, setTyping] = React.useState(false);
   const [input, setInput] = React.useState("");
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -770,7 +1369,7 @@ function Ask() {
         const data = await res.json().catch(() => ({}));
         throw new Error(
           (data as { error?: string }).error ??
-            `Request failed with status ${res.status}`,
+          `Request failed with status ${res.status}`,
         );
       }
 
@@ -964,69 +1563,210 @@ function AskTyping() {
 // Replay
 // =====================================================================
 
-function Replay({ navigate }: { navigate: NavFn }) {
-  const options = [
-    {
-      id: "A",
-      text: "Apologize and immediately promise a new deadline",
-      why: "Promising before alignment risks repeating the same trust break.",
-    },
-    {
-      id: "B",
-      text: "Meet internally to clarify the issue, assign owners, and confirm a realistic plan",
-      best: true,
-      why: "Matches the original win — alignment first, then external promises.",
-    },
-    {
-      id: "C",
-      text: "Offer a discount before discussing the root problem",
-      why: "Discounts treat the symptom, not the trust gap.",
-    },
-    {
-      id: "D",
-      text: "Wait until the client follows up again",
-      why: "Silence often deepens churn risk in this pattern.",
-    },
-  ] as const;
+type ReplayOptionId = "A" | "B" | "C" | "D";
+type ReplayOption = {
+  id: ReplayOptionId;
+  text: string;
+  isCorrect: boolean;
+  why: string;
+};
+type ReplayScenario = {
+  id: string;
+  sourceWinId: string;
+  sourceWinName: string;
+  title: string;
+  category: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+  prompt: string;
+  question: string;
+  options: ReplayOption[];
+  repeatableRule: string;
+};
+type ReplayScenariosResponse = { scenarios: ReplayScenario[] };
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function Replay({ navigate }: { navigate: NavFn }) {
+  const [scenarios, setScenarios] = React.useState<ReplayScenario[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = React.useState(0);
   const [picked, setPicked] = React.useState<string | null>(null);
   const [showFeedback, setShowFeedback] = React.useState(false);
+  const [completed, setCompleted] = React.useState(false);
+  const [reloadToken, setReloadToken] = React.useState(0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setCurrentIndex(0);
+    setPicked(null);
+    setShowFeedback(false);
+    setCompleted(false);
+    fetch("/api/replay-scenarios", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()) as ReplayScenariosResponse;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setScenarios(Array.isArray(data?.scenarios) ? data.scenarios : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Could not load Decision Replay scenarios.");
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
+
+  const scenario = scenarios[currentIndex];
+  const correctOption = scenario?.options.find((o) => o.isCorrect) ?? null;
+  const pickedOption = scenario?.options.find((o) => o.id === picked) ?? null;
+  const correct = Boolean(pickedOption?.isCorrect);
+  const total = scenarios.length;
+  const isLast = total > 0 && currentIndex >= total - 1;
 
   const submit = () => {
     if (!picked) return;
     setShowFeedback(true);
   };
-  const reset = () => {
+  const goNext = () => {
+    if (isLast) {
+      setCompleted(true);
+      return;
+    }
+    setCurrentIndex((i) => i + 1);
     setPicked(null);
     setShowFeedback(false);
   };
-  const correct = picked === "B";
+  const practiceAgain = () => setReloadToken((t) => t + 1);
 
-  return (
-    <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-        <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1">
-            Practice mode
-          </div>
-          <h1 className="font-serif text-4xl text-navy-900 leading-tight">
-            Decision Replay
-          </h1>
-          <p className="text-slate2-500 mt-1 text-sm max-w-xl">
-            Rehearse a real decision before you have to make it for real.
-            Scenarios are generated from your org&apos;s wins.
-          </p>
+  const header = (
+    <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+      <div>
+        <div className="text-xs font-mono uppercase tracking-wider text-slate2-400 mb-1">
+          Practice mode
         </div>
+        <h1 className="font-serif text-4xl text-navy-900 leading-tight">
+          Decision Replay
+        </h1>
+        <p className="text-slate2-500 mt-1 text-sm max-w-xl">
+          Rehearse a real decision before you have to make it for real.
+          Scenarios are generated from your org&apos;s wins.
+        </p>
+      </div>
+      {scenario && !completed && (
         <div className="flex gap-2">
           <span className="chip">
             Difficulty:{" "}
-            <span className="text-navy-900 font-medium ml-1">Medium</span>
+            <span className="text-navy-900 font-medium ml-1">
+              {scenario.difficulty}
+            </span>
           </span>
           <span className="chip">
-            <IconBolt size={12} className="text-gold-500" /> Based on WIN-012
+            <IconBolt size={12} className="text-gold-500" /> Based on{" "}
+            {scenario.sourceWinId}
           </span>
         </div>
+      )}
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center text-slate2-500">
+          Generating scenarios from your captured wins…
+        </div>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center">
+          <h3 className="font-medium text-navy-900">{error}</h3>
+          <p className="text-sm text-slate2-500 mt-2">
+            Something went wrong reaching the scenario generator.
+          </p>
+          <div className="mt-5 flex justify-center gap-2">
+            <button className="btn-primary" onClick={practiceAgain}>
+              Retry <IconArrow size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (total === 0) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center">
+          <h3 className="font-medium text-navy-900">
+            No wins found yet.
+          </h3>
+          <p className="text-sm text-slate2-500 mt-2">
+            Capture a win first to generate Decision Replay scenarios.
+          </p>
+          <div className="mt-5 flex justify-center gap-2">
+            <button className="btn-primary" onClick={() => navigate("capture")}>
+              Capture a win <IconArrow size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (completed) {
+    return (
+      <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+        {header}
+        <div className="card p-8 text-center">
+          <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white mx-auto flex items-center justify-center">
+            <IconCheck size={22} />
+          </div>
+          <h3 className="font-medium text-navy-900 mt-4">Replay complete.</h3>
+          <p className="text-sm text-slate2-500 mt-2">
+            You practiced {total} decision{" "}
+            {total === 1 ? "scenario" : "scenarios"} generated from your
+            captured wins.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button className="btn-primary" onClick={practiceAgain}>
+              Practice again <IconArrow size={14} />
+            </button>
+            <button className="btn-ghost" onClick={() => navigate("capture")}>
+              Capture another win
+            </button>
+            <button className="btn-gold" onClick={() => navigate("ask")}>
+              Ask Gordian to coach me <IconArrow size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Scenario is guaranteed defined here.
+  if (!scenario) return null;
+  const upcoming = scenarios.slice(currentIndex + 1);
+
+  return (
+    <div className="px-6 sm:px-10 py-8 max-w-[1100px] mx-auto">
+      {header}
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 card overflow-hidden">
@@ -1036,17 +1776,20 @@ function Replay({ navigate }: { navigate: NavFn }) {
                 <IconReplay size={16} />
               </span>
               <div>
-                <h2 className="font-medium text-navy-900">Scenario 01 of 03</h2>
+                <h2 className="font-medium text-navy-900">
+                  Scenario {pad2(currentIndex + 1)} of {pad2(total)}
+                </h2>
                 <p className="text-xs text-slate2-400">
-                  Client Success · Account at risk
+                  {scenario.category} · {scenario.sourceWinName}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {[0, 1, 2].map((i) => (
+              {scenarios.map((_, i) => (
                 <span
                   key={i}
-                  className={`w-6 h-1 rounded-full ${i === 0 ? "bg-gold-400" : "bg-slate2-200"}`}
+                  className={`w-6 h-1 rounded-full ${i === currentIndex ? "bg-gold-400" : "bg-slate2-200"
+                    }`}
                 />
               ))}
             </div>
@@ -1054,47 +1797,42 @@ function Replay({ navigate }: { navigate: NavFn }) {
 
           <div className="px-6 sm:px-8 py-7">
             <p className="font-serif text-2xl text-navy-900 leading-snug">
-              &quot;A client is frustrated because your team missed a milestone.
-              The account lead wants to quickly promise a new deadline, but the
-              operations team is unsure if that deadline is realistic.
+              &quot;{scenario.prompt}
               <br />
-              <span className="text-gold-700">What should you do first?</span>
+              <span className="text-gold-700">{scenario.question}</span>
               &quot;
             </p>
 
             <div className="mt-7 space-y-2.5">
-              {options.map((opt) => {
+              {scenario.options.map((opt) => {
                 const isPicked = picked === opt.id;
-                const isCorrect = showFeedback && "best" in opt && opt.best;
-                const isWrong =
-                  showFeedback && isPicked && !("best" in opt && opt.best);
+                const isCorrect = showFeedback && opt.isCorrect;
+                const isWrong = showFeedback && isPicked && !opt.isCorrect;
                 return (
                   <button
                     key={opt.id}
                     onClick={() => !showFeedback && setPicked(opt.id)}
                     disabled={showFeedback}
                     className={`w-full text-left rounded-xl border p-4 flex items-start gap-3 transition-all
-                      ${
-                        isCorrect
-                          ? "border-emerald-300 bg-emerald-50/50"
-                          : isWrong
+                      ${isCorrect
+                        ? "border-emerald-300 bg-emerald-50/50"
+                        : isWrong
                           ? "border-red-200 bg-red-50/50"
                           : isPicked
-                          ? "border-gold-300 bg-gold-50/50 shadow-soft"
-                          : "border-slate2-100 bg-white hover:border-slate2-300 hover:bg-ivory/60"
+                            ? "border-gold-300 bg-gold-50/50 shadow-soft"
+                            : "border-slate2-100 bg-white hover:border-slate2-300 hover:bg-ivory/60"
                       }`}
                   >
                     <span
                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-medium shrink-0
-                      ${
-                        isCorrect
+                      ${isCorrect
                           ? "bg-emerald-600 text-white"
                           : isWrong
-                          ? "bg-red-500 text-white"
-                          : isPicked
-                          ? "bg-navy-900 text-paper"
-                          : "bg-slate2-100 text-slate2-700"
-                      }`}
+                            ? "bg-red-500 text-white"
+                            : isPicked
+                              ? "bg-navy-900 text-paper"
+                              : "bg-slate2-100 text-slate2-700"
+                        }`}
                     >
                       {isCorrect ? (
                         <IconCheck size={14} />
@@ -1123,8 +1861,8 @@ function Replay({ navigate }: { navigate: NavFn }) {
 
             <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-xs text-slate2-400 flex items-center gap-2">
-                <IconHelp size={12} /> Choose the action that protects trust
-                first.
+                <IconHelp size={12} /> Choose the action that best repeats the
+                successful pattern.
               </div>
               {!showFeedback ? (
                 <button
@@ -1136,14 +1874,12 @@ function Replay({ navigate }: { navigate: NavFn }) {
                 </button>
               ) : (
                 <div className="flex gap-2">
-                  <button className="btn-ghost" onClick={reset}>
-                    Try again
+                  <button className="btn-ghost" onClick={() => navigate("ask")}>
+                    Ask Gordian to coach me
                   </button>
-                  <button
-                    className="btn-gold"
-                    onClick={() => navigate("ask")}
-                  >
-                    Ask Gordian to coach me <IconArrow size={14} />
+                  <button className="btn-gold" onClick={goNext}>
+                    {isLast ? "Finish replay" : "Next scenario"}{" "}
+                    <IconArrow size={14} />
                   </button>
                 </div>
               )}
@@ -1164,15 +1900,22 @@ function Replay({ navigate }: { navigate: NavFn }) {
                   <h3 className="font-medium text-navy-900">
                     {correct ? "Correct." : "Worth a re-read."}
                   </h3>
-                  <p className="text-sm text-navy-900/80 mt-1.5 leading-relaxed">
-                    In the original win, the successful leader first aligned the
-                    internal team before making external promises. This
-                    protected trust, reduced confusion, and created a clear
-                    recovery plan.
-                  </p>
+                  {pickedOption && !correct && (
+                    <p className="text-sm text-navy-900/80 mt-1.5 leading-relaxed">
+                      <span className="font-medium">Your pick:</span>{" "}
+                      {pickedOption.why}
+                    </p>
+                  )}
+                  {correctOption && (
+                    <p className="text-sm text-navy-900/80 mt-1.5 leading-relaxed">
+                      <span className="font-medium">Best action:</span>{" "}
+                      {correctOption.why}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     <span className="chip chip-gold">
-                      <IconDoc size={11} /> Source: WIN-012
+                      <IconDoc size={11} /> Source: {scenario.sourceWinId} ·{" "}
+                      {scenario.sourceWinName}
                     </span>
                     <span className="chip">Repeatable Rule applied</span>
                   </div>
@@ -1197,33 +1940,40 @@ function Replay({ navigate }: { navigate: NavFn }) {
             <h4 className="font-medium text-navy-900 flex items-center gap-2">
               <IconFlag size={14} /> Up next
             </h4>
-            <ul className="mt-3 space-y-3">
-              {(
-                [
-                  ["02", "Reframing a stalled partnership", "Sales · Leadership"],
-                  ["03", "Recovering after a missed handoff", "Operations"],
-                ] as [string, string, string][]
-              ).map(([n, t, m]) => (
-                <li key={n} className="flex items-center gap-3">
-                  <span className="text-[11px] font-mono text-slate2-400">
-                    {n}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-navy-900 truncate">{t}</div>
-                    <div className="text-xs text-slate2-400">{m}</div>
-                  </div>
-                  <IconChevR size={14} className="text-slate2-300" />
-                </li>
-              ))}
-            </ul>
+            {upcoming.length === 0 ? (
+              <p className="mt-3 text-sm text-slate2-400">
+                No more scenarios in this replay.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {upcoming.map((s, i) => (
+                  <li key={s.id} className="flex items-center gap-3">
+                    <span className="text-[11px] font-mono text-slate2-400">
+                      {pad2(currentIndex + 2 + i)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-navy-900 truncate">
+                        {s.title}
+                      </div>
+                      <div className="text-xs text-slate2-400 truncate">
+                        {s.category} · {s.sourceWinId}
+                      </div>
+                    </div>
+                    <IconChevR size={14} className="text-slate2-300" />
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="card p-5 knot-bg text-paper">
             <div className="text-[11px] font-mono uppercase tracking-wider text-gold-300 mb-2">
-              Your streak
+              Your progress
             </div>
-            <div className="font-serif text-4xl">7 days</div>
+            <div className="font-serif text-4xl">
+              {currentIndex + (showFeedback ? 1 : 0)}/{total}
+            </div>
             <p className="text-sm text-slate2-200/80 mt-2">
-              5 scenarios completed · avg confidence +24%
+              Scenarios answered in this replay
             </p>
           </div>
         </div>
@@ -1319,12 +2069,12 @@ type BotKind =
 type ChatBubbleMsg =
   | { role: "user"; text: string }
   | {
-      role: "bot";
-      text: string;
-      kind?: BotKind;
-      sectionId?: SectionId;
-      sectionLabel?: string;
-    };
+    role: "bot";
+    text: string;
+    kind?: BotKind;
+    sectionId?: SectionId;
+    sectionLabel?: string;
+  };
 
 function shorten(s: string, n = 140) {
   s = (s || "").replace(/\s+/g, " ").trim();
@@ -1340,18 +2090,26 @@ type Playbook = {
 };
 
 type CaptureChatMode =
-  | "ask_next_question"
+  | "pick_next_question"
+  | "process_user_message"
   | "summarize_section"
   | "generate_playbook";
+
+type CaptureProcessResult =
+  | { kind: "answer"; assistantMessage: string; capturedAnswer: string }
+  | { kind: "side_question"; reply: string };
 
 type CaptureChatRequest = {
   winName: string;
   sectionId: SectionId;
   sectionLabel: string;
   questionIndex: number;
-  currentQuestion: string;
+  questionsPerSection: number;
+  currentQuestion?: string;
   lastAnswer?: string;
+  userMessage?: string;
   answers: Record<SectionId, string[]>;
+  priorQuestions?: Partial<Record<SectionId, string[]>>;
   mode: CaptureChatMode;
 };
 
@@ -1362,7 +2120,11 @@ type CaptureChatResponse = {
   isSectionComplete: boolean;
   isFlowComplete: boolean;
   playbook: Playbook | null;
+  answerTitles?: Record<SectionId, string[]>;
+  process?: CaptureProcessResult;
 };
+
+const QUESTIONS_PER_SECTION = 1;
 
 async function callCaptureChat(
   req: CaptureChatRequest,
@@ -1381,6 +2143,14 @@ async function callCaptureChat(
   return (await res.json()) as CaptureChatResponse;
 }
 
+const EMPTY_SECTION_RECORD = (): Record<SectionId, string[]> => ({
+  strategy: [],
+  workPlan: [],
+  people: [],
+  operations: [],
+  results: [],
+});
+
 function Capture({ navigate }: { navigate: NavFn }) {
   const [winName, setWinName] = React.useState("");
   const [sectionIdx, setSectionIdx] = React.useState(-1);
@@ -1393,15 +2163,39 @@ function Capture({ navigate }: { navigate: NavFn }) {
     operations: [],
     results: [],
   });
+  const [questionsAsked, setQuestionsAsked] = React.useState<
+    Record<SectionId, string[]>
+  >(EMPTY_SECTION_RECORD);
+  const [currentQuestion, setCurrentQuestion] = React.useState<string>("");
   const [messages, setMessages] = React.useState<ChatBubbleMsg[]>([]);
   const [typing, setTyping] = React.useState(false);
   const [input, setInput] = React.useState("");
   const [complete, setComplete] = React.useState(false);
-  const [playbook, setPlaybook] = React.useState<Playbook | null>(null);
+  const [playbookStarted, setPlaybookStarted] = React.useState(false);
+  const [savedWinId, setSavedWinId] = React.useState<string | null>(null);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const initRef = React.useRef(false);
+
+  const patchWin = React.useCallback(
+    async (id: string, body: Record<string, unknown>) => {
+      try {
+        const res = await fetch(`/api/wins/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`PATCH failed (${res.status})`);
+      } catch (err) {
+        setSaveError(
+          err instanceof Error ? err.message : "Could not save progress",
+        );
+      }
+    },
+    [],
+  );
 
   const pushBot = React.useCallback(
     async (texts: string[] | string, kind?: BotKind) => {
@@ -1428,6 +2222,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
     pushBot(
       [
         "Welcome to the Guided Win Builder. I'll help you turn one successful outcome into a repeatable playbook using the Executive Winning System.",
+        "I adapt my questions to your win, and you can ask me a quick business question any time — those won't be saved with the win.",
         "First, what would you like to call this win?",
       ],
       "welcome",
@@ -1453,19 +2248,81 @@ function Capture({ navigate }: { navigate: NavFn }) {
     setTyping(false);
   }, []);
 
+  const askNextQuestion = React.useCallback(
+    async (
+      sec: (typeof EWS_SECTIONS)[number],
+      qSlot: number,
+      sectionAnswers: Record<SectionId, string[]>,
+      askedAcrossSections: Record<SectionId, string[]>,
+      latestWinName: string,
+    ): Promise<string> => {
+      try {
+        const res = await callCaptureChat({
+          winName: latestWinName,
+          sectionId: sec.id,
+          sectionLabel: sec.label,
+          questionIndex: qSlot,
+          questionsPerSection: QUESTIONS_PER_SECTION,
+          answers: sectionAnswers,
+          priorQuestions: askedAcrossSections,
+          mode: "pick_next_question",
+        });
+        const q =
+          res.nextQuestion ??
+          res.assistantMessage ??
+          sec.questions[Math.min(qSlot, sec.questions.length - 1)];
+        return q;
+      } catch {
+        return sec.questions[Math.min(qSlot, sec.questions.length - 1)];
+      }
+    },
+    [],
+  );
+
   const submit = async (raw?: string) => {
     const text = (raw ?? input).trim();
     if (!text || typing || complete) return;
     setInput("");
     setMessages((m) => [...m, { role: "user", text }]);
 
+    // Phase 1: capture the win name and start a draft on disk.
     if (sectionIdx === -1) {
       setWinName(text);
-      setAnswers((a) => ({ ...a, winName: text }));
+      const seededAnswers: Answers = { ...answers, winName: text };
+      setAnswers(seededAnswers);
+
+      setTyping(true);
+      // Create a draft so we can PATCH iteratively from here on.
+      try {
+        const res = await fetch("/api/wins", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers: seededAnswers }),
+        });
+        if (!res.ok) throw new Error(`Draft create failed (${res.status})`);
+        const created = (await res.json()) as { id: string };
+        setSavedWinId(created.id);
+        setSaveError(null);
+      } catch (err) {
+        setSaveError(
+          err instanceof Error ? err.message : "Could not start a draft win",
+        );
+      }
+
+      const firstSection = EWS_SECTIONS[0];
+      const firstQ = await askNextQuestion(
+        firstSection,
+        0,
+        EMPTY_SECTION_RECORD(),
+        EMPTY_SECTION_RECORD(),
+        text,
+      );
+      setCurrentQuestion(firstQ);
+
       await pushBot(
         [
           `"${text}" — got it. Let's start with **Strategy**.`,
-          EWS_SECTIONS[0].questions[0],
+          firstQ,
         ],
         "question",
       );
@@ -1475,14 +2332,75 @@ function Capture({ navigate }: { navigate: NavFn }) {
     }
 
     const section = EWS_SECTIONS[sectionIdx];
+    const sectionAnswersBefore: Record<SectionId, string[]> = {
+      strategy: answers.strategy,
+      workPlan: answers.workPlan,
+      people: answers.people,
+      operations: answers.operations,
+      results: answers.results,
+    };
+
+    setTyping(true);
+
+    // Phase 2: classify whether the input is an answer or a side question.
+    let processed: CaptureProcessResult | null = null;
+    try {
+      const res = await callCaptureChat({
+        winName: answers.winName,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        questionIndex: qIdx,
+        questionsPerSection: QUESTIONS_PER_SECTION,
+        currentQuestion,
+        userMessage: text,
+        answers: sectionAnswersBefore,
+        mode: "process_user_message",
+      });
+      processed = res.process ?? null;
+    } catch (err) {
+      handleApiError(err instanceof Error ? err.message : "");
+      return;
+    }
+
+    // Side question — reply, do not store, leave the active question pending.
+    if (processed?.kind === "side_question") {
+      setMessages((m) => [
+        ...m,
+        { role: "bot", text: processed!.reply, kind: "context" },
+        {
+          role: "bot",
+          text: `To recap: ${currentQuestion}`,
+          kind: "question",
+        },
+      ]);
+      setTyping(false);
+      setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
+      return;
+    }
+
+    // Treat as an answer.
+    const captured =
+      processed?.kind === "answer" && processed.capturedAnswer
+        ? processed.capturedAnswer
+        : text;
+    const ack =
+      processed?.kind === "answer" ? processed.assistantMessage : "Captured.";
+
     const newAnswers: Answers = {
       ...answers,
       [section.id]: [...(answers[section.id] || [])],
     };
-    newAnswers[section.id][qIdx] = text;
+    newAnswers[section.id][qIdx] = captured;
     setAnswers(newAnswers);
 
-    const sectionAnswersOnly: Record<SectionId, string[]> = {
+    const newQuestionsAsked: Record<SectionId, string[]> = {
+      ...questionsAsked,
+      [section.id]: [...(questionsAsked[section.id] || [])],
+    };
+    newQuestionsAsked[section.id][qIdx] = currentQuestion;
+    setQuestionsAsked(newQuestionsAsked);
+
+    const sectionAnswersAfter: Record<SectionId, string[]> = {
       strategy: newAnswers.strategy,
       workPlan: newAnswers.workPlan,
       people: newAnswers.people,
@@ -1490,41 +2408,36 @@ function Capture({ navigate }: { navigate: NavFn }) {
       results: newAnswers.results,
     };
 
-    const isLast = qIdx >= section.questions.length - 1;
-    setTyping(true);
+    if (savedWinId) {
+      void patchWin(savedWinId, {
+        answers: newAnswers,
+        questions: newQuestionsAsked,
+      });
+    }
+
+    const isLast = qIdx >= QUESTIONS_PER_SECTION - 1;
 
     if (!isLast) {
-      try {
-        const res = await callCaptureChat({
-          winName: newAnswers.winName,
-          sectionId: section.id,
-          sectionLabel: section.label,
-          questionIndex: qIdx,
-          currentQuestion: section.questions[qIdx],
-          lastAnswer: text,
-          answers: sectionAnswersOnly,
-          mode: "ask_next_question",
-        });
-        setMessages((m) => [
-          ...m,
-          { role: "bot", text: res.assistantMessage, kind: "context" },
-          {
-            role: "bot",
-            text: section.questions[qIdx + 1],
-            kind: "question",
-          },
-        ]);
-        setQIdx(qIdx + 1);
-      } catch (err) {
-        handleApiError(err instanceof Error ? err.message : "");
-        return;
-      }
+      const nextQ = await askNextQuestion(
+        section,
+        qIdx + 1,
+        sectionAnswersAfter,
+        newQuestionsAsked,
+        newAnswers.winName,
+      );
+      setCurrentQuestion(nextQ);
+      setMessages((m) => [
+        ...m,
+        { role: "bot", text: ack, kind: "context" },
+        { role: "bot", text: nextQ, kind: "question" },
+      ]);
+      setQIdx(qIdx + 1);
       setTyping(false);
       setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
       return;
     }
 
-    // End of section — ask the LLM for a real summary, then either move on
+    // End of section — summarize, then either advance to the next section
     // or surface the playbook CTA.
     const isFinalSection = sectionIdx >= EWS_SECTIONS.length - 1;
     try {
@@ -1533,9 +2446,10 @@ function Capture({ navigate }: { navigate: NavFn }) {
         sectionId: section.id,
         sectionLabel: section.label,
         questionIndex: qIdx,
-        currentQuestion: section.questions[qIdx],
-        lastAnswer: text,
-        answers: sectionAnswersOnly,
+        questionsPerSection: QUESTIONS_PER_SECTION,
+        currentQuestion,
+        lastAnswer: captured,
+        answers: sectionAnswersAfter,
         mode: "summarize_section",
       });
 
@@ -1544,6 +2458,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
 
       setMessages((m) => [
         ...m,
+        { role: "bot", text: ack, kind: "context" },
         {
           role: "bot",
           text: summaryRes.assistantMessage || section.summaryLead,
@@ -1560,10 +2475,18 @@ function Capture({ navigate }: { navigate: NavFn }) {
 
       if (!isFinalSection) {
         const next = EWS_SECTIONS[sectionIdx + 1];
+        const firstQ = await askNextQuestion(
+          next,
+          0,
+          sectionAnswersAfter,
+          newQuestionsAsked,
+          newAnswers.winName,
+        );
+        setCurrentQuestion(firstQ);
         setMessages((m) => [
           ...m,
           { role: "bot", text: section.transition, kind: "transition" },
-          { role: "bot", text: next.questions[0], kind: "question" },
+          { role: "bot", text: firstQ, kind: "question" },
         ]);
         setSectionIdx(sectionIdx + 1);
         setQIdx(0);
@@ -1594,14 +2517,19 @@ function Capture({ navigate }: { navigate: NavFn }) {
       operations: [],
       results: [],
     });
+    setQuestionsAsked(EMPTY_SECTION_RECORD());
+    setCurrentQuestion("");
     setMessages([]);
     setComplete(false);
-    setPlaybook(null);
+    setPlaybookStarted(false);
+    setSavedWinId(null);
+    setSaveError(null);
     setInput("");
     setTimeout(() => {
       pushBot(
         [
           "Welcome to the Guided Win Builder. I'll help you turn one successful outcome into a repeatable playbook using the Executive Winning System.",
+          "I adapt my questions to your win, and you can ask me a quick business question any time — those won't be saved with the win.",
           "First, what would you like to call this win?",
         ],
         "welcome",
@@ -1611,6 +2539,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
 
   const generate = async () => {
     if (typing) return;
+    setPlaybookStarted(true);
     setTyping(true);
     try {
       const res = await callCaptureChat({
@@ -1618,7 +2547,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
         sectionId: "results",
         sectionLabel: "Results",
         questionIndex: 0,
-        currentQuestion: "",
+        questionsPerSection: QUESTIONS_PER_SECTION,
         answers: {
           strategy: answers.strategy,
           workPlan: answers.workPlan,
@@ -1629,15 +2558,40 @@ function Capture({ navigate }: { navigate: NavFn }) {
         mode: "generate_playbook",
       });
       if (res.playbook) {
-        setPlaybook(res.playbook);
-        setMessages((m) => [
-          ...m,
-          { role: "bot", text: res.assistantMessage, kind: "cta" },
-        ]);
-        setTimeout(() => {
-          const el = document.getElementById("playbook-card");
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 100);
+        let winId = savedWinId;
+        if (winId) {
+          await patchWin(winId, {
+            answers,
+            questions: questionsAsked,
+            answerTitles: res.answerTitles,
+            playbook: res.playbook,
+            description: res.playbook.summaries.strategy?.[0] ?? "",
+          });
+        } else {
+          try {
+            const saveRes = await fetch("/api/wins", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                answers,
+                playbook: res.playbook,
+                questions: questionsAsked,
+                answerTitles: res.answerTitles,
+              }),
+            });
+            if (!saveRes.ok) throw new Error(`Save failed (${saveRes.status})`);
+            const saved = (await saveRes.json()) as { id: string };
+            winId = saved.id;
+            setSavedWinId(winId);
+            setSaveError(null);
+          } catch (err) {
+            setSaveError(
+              err instanceof Error ? err.message : "Could not save this win",
+            );
+          }
+        }
+        setTyping(false);
+        if (winId) navigate("win-summary", winId);
       } else {
         handleApiError("");
       }
@@ -1687,6 +2641,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
         states={stepperState}
         qIdx={qIdx}
         complete={complete}
+        questionsPerSection={QUESTIONS_PER_SECTION}
       />
 
       <div className="grid lg:grid-cols-3 gap-5 mt-6">
@@ -1703,7 +2658,7 @@ function Capture({ navigate }: { navigate: NavFn }) {
             currentSection={currentSection}
             complete={complete}
             onGenerate={generate}
-            playbookOpen={!!playbook}
+            playbookOpen={playbookStarted}
             winName={winName}
           />
         </div>
@@ -1712,19 +2667,11 @@ function Capture({ navigate }: { navigate: NavFn }) {
             answers={answers}
             sectionIdx={sectionIdx}
             complete={complete}
+            questionsPerSection={QUESTIONS_PER_SECTION}
           />
         </div>
       </div>
 
-      {playbook && (
-        <div id="playbook-card" className="mt-10 anim-in">
-          <PlaybookSummaryCard
-            playbook={playbook}
-            navigate={navigate}
-            onReset={reset}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -1740,10 +2687,12 @@ function ProgressStepper({
   states,
   qIdx,
   complete,
+  questionsPerSection,
 }: {
   states: ("done" | "active" | "upcoming")[];
   qIdx: number;
   complete: boolean;
+  questionsPerSection: number;
 }) {
   return (
     <div className="card p-4 sm:p-5">
@@ -1756,20 +2705,18 @@ function ProgressStepper({
             <React.Fragment key={s.id}>
               <div
                 className={`flex items-center gap-3 px-2.5 py-2 rounded-xl shrink-0 transition-colors
-                  ${
-                    isActive
-                      ? "bg-gold-50 border border-gold-200"
-                      : isDone
+                  ${isActive
+                    ? "bg-gold-50 border border-gold-200"
+                    : isDone
                       ? "bg-emerald-50/60 border border-emerald-100"
                       : "bg-transparent border border-transparent"
                   }`}
               >
                 <span
                   className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-medium shrink-0
-                    ${
-                      isActive
-                        ? "bg-gold-400 text-navy-900"
-                        : isDone
+                    ${isActive
+                      ? "bg-gold-400 text-navy-900"
+                      : isDone
                         ? "bg-emerald-600 text-white"
                         : "bg-slate2-100 text-slate2-500"
                     }`}
@@ -1779,10 +2726,9 @@ function ProgressStepper({
                 <div className="min-w-0">
                   <div
                     className={`text-sm font-medium leading-tight whitespace-nowrap
-                      ${
-                        isActive
-                          ? "text-gold-700"
-                          : isDone
+                      ${isActive
+                        ? "text-gold-700"
+                        : isDone
                           ? "text-emerald-700"
                           : "text-slate2-500"
                       }`}
@@ -1796,15 +2742,14 @@ function ProgressStepper({
                 {isActive && !complete && (
                   <span className="hidden md:flex items-center gap-1.5 ml-2 text-[11px] font-mono text-gold-700">
                     <span className="w-1 h-1 rounded-full bg-gold-500 pulse-dot" />
-                    Q{qIdx + 1}/{s.questions.length}
+                    Q{qIdx + 1}/{questionsPerSection}
                   </span>
                 )}
               </div>
               {i < EWS_SECTIONS.length - 1 && (
                 <div
-                  className={`hidden sm:block h-px flex-1 min-w-[16px] ${
-                    states[i] === "done" ? "bg-emerald-200" : "bg-slate2-100"
-                  }`}
+                  className={`hidden sm:block h-px flex-1 min-w-[16px] ${states[i] === "done" ? "bg-emerald-200" : "bg-slate2-100"
+                    }`}
                 />
               )}
             </React.Fragment>
@@ -1865,10 +2810,10 @@ function ChatPanel({
             {complete
               ? "All sections captured · ready to generate"
               : currentSection
-              ? `Currently capturing — ${currentSection.label}`
-              : winName
-              ? `Building "${winName}"`
-              : "Ready when you are"}
+                ? `Currently capturing — ${currentSection.label}`
+                : winName
+                  ? `Building "${winName}"`
+                  : "Ready when you are"}
           </div>
         </div>
       </div>
@@ -2053,10 +2998,12 @@ function CapturedSoFarPanel({
   answers,
   sectionIdx,
   complete,
+  questionsPerSection,
 }: {
   answers: Answers;
   sectionIdx: number;
   complete: boolean;
+  questionsPerSection: number;
 }) {
   return (
     <div className="card p-5 sticky top-20">
@@ -2082,7 +3029,7 @@ function CapturedSoFarPanel({
         {EWS_SECTIONS.map((s, i) => {
           const arr = answers[s.id] || [];
           const filled = arr.filter(Boolean).length;
-          const total = s.questions.length;
+          const total = questionsPerSection;
           const isActive = !complete && sectionIdx === i;
           const isDone = complete || sectionIdx > i;
 
@@ -2094,10 +3041,9 @@ function CapturedSoFarPanel({
               <div className="flex items-center gap-2 mb-1.5">
                 <span
                   className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-mono font-medium
-                    ${
-                      isDone
-                        ? "bg-emerald-600 text-white"
-                        : isActive
+                    ${isDone
+                      ? "bg-emerald-600 text-white"
+                      : isActive
                         ? "bg-gold-400 text-navy-900"
                         : "bg-slate2-100 text-slate2-500"
                     }`}
@@ -2142,178 +3088,3 @@ function CapturedSoFarPanel({
   );
 }
 
-function PlaybookSummaryCard({
-  playbook,
-  navigate,
-  onReset,
-}: {
-  playbook: Playbook;
-  navigate: NavFn;
-  onReset: () => void;
-}) {
-  const sections: { id: SectionId; label: string }[] = [
-    { id: "strategy", label: "Strategy Summary" },
-    { id: "workPlan", label: "Work Plan Summary" },
-    { id: "people", label: "People Summary" },
-    { id: "operations", label: "Operations Summary" },
-    { id: "results", label: "Results Summary" },
-  ];
-  return (
-    <div className="card overflow-hidden">
-      <div className="p-6 sm:p-8 knot-bg text-paper">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="w-2 h-2 rounded-full bg-gold-400 pulse-dot" />
-          <span className="text-[11px] font-mono uppercase tracking-wider text-gold-300">
-            Executive Winning System Playbook
-          </span>
-        </div>
-        <h2 className="font-serif text-3xl sm:text-4xl leading-tight">
-          {playbook.name}
-        </h2>
-        <p className="text-paper/70 text-sm mt-2">
-          Compiled from your Strategy, Work Plan, People, Operations, and
-          Results.
-        </p>
-      </div>
-
-      <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate2-100">
-        <div className="p-6 sm:p-8 space-y-5">
-          {sections.map((sec, i) => (
-            <div key={sec.id}>
-              <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-gold-700 mb-2 flex items-center gap-2">
-                {String(i + 1).padStart(2, "0")} · {sec.label}
-                <span className="h-px flex-1 bg-gold-100" />
-              </div>
-              {playbook.summaries[sec.id] && playbook.summaries[sec.id].length ? (
-                <ul className="space-y-1.5">
-                  {playbook.summaries[sec.id].map((line, j) => (
-                    <li
-                      key={j}
-                      className="text-navy-900 text-sm leading-relaxed flex gap-2"
-                    >
-                      <span className="text-gold-500 mt-1">•</span>
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-sm text-slate2-400 italic">
-                  — not captured —
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="p-6 sm:p-8 space-y-6 bg-ivory/50">
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-gold-700 mb-2">
-              Repeatable Rule
-            </div>
-            <p className="font-serif italic text-2xl text-navy-900 leading-snug">
-              &quot;{playbook.repeatableRule}&quot;
-            </p>
-          </div>
-
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-2">
-              Suggested Next Win
-            </div>
-            <p className="text-navy-900 text-sm leading-relaxed">
-              {playbook.suggestedNextWin}
-            </p>
-          </div>
-
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-slate2-500 mb-3">
-              Save / Delete / Join Reflection
-            </div>
-            <div className="space-y-2.5">
-              <SDJItem
-                letter="S"
-                label="Save"
-                tone="emerald"
-                text={playbook.sdj.save}
-                hint="What should the organization keep from this win?"
-              />
-              <SDJItem
-                letter="D"
-                label="Delete"
-                tone="red"
-                text={playbook.sdj.delete}
-                hint="What should the organization avoid next time?"
-              />
-              <SDJItem
-                letter="J"
-                label="Join"
-                tone="gold"
-                text={playbook.sdj.join}
-                hint="What could be combined with another win to create future success?"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-6 sm:px-8 py-5 bg-white border-t border-slate2-100 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-xs text-slate2-500 flex items-center gap-3 flex-wrap">
-          <span className="flex items-center gap-1.5">
-            <IconShield size={12} /> Visible to your role group
-          </span>
-          <span className="hairline w-px h-3" />
-          <span className="flex items-center gap-1.5">
-            <IconCheck size={12} className="text-emerald-600" /> Ready to share
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <button className="btn-ghost" onClick={onReset}>
-            <IconReplay size={14} /> Build another
-          </button>
-          <button className="btn-ghost" onClick={() => navigate("replay")}>
-            <IconReplay size={14} /> Replay this
-          </button>
-          <button className="btn-gold" onClick={() => navigate("ask")}>
-            Coach a teammate <IconArrow size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SDJItem({
-  letter,
-  label,
-  tone,
-  text,
-  hint,
-}: {
-  letter: string;
-  label: string;
-  tone: "emerald" | "red" | "gold";
-  text: string;
-  hint: string;
-}) {
-  const toneCls = {
-    emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    red: "bg-red-100 text-red-700 border-red-200",
-    gold: "bg-gold-100 text-gold-700 border-gold-200",
-  }[tone];
-  return (
-    <div className="flex gap-3">
-      <div
-        className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-mono font-medium border ${toneCls} shrink-0`}
-      >
-        {letter}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-navy-900">
-          {label} <span className="text-slate2-400 font-normal">— {hint}</span>
-        </div>
-        <div className="text-sm text-slate2-700 leading-relaxed mt-0.5">
-          {text}
-        </div>
-      </div>
-    </div>
-  );
-}

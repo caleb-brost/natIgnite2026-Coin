@@ -1,0 +1,127 @@
+{
+  "id": "WIN-001",
+  "name": "Modernizing a Commercial Building Electrical Service Upgrade With Minimal Tenant Downtime",
+  "createdAt": "2026-05-09T22:18:04.024Z",
+  "updatedAt": "2026-05-09T22:25:52.518Z",
+  "author": "Lin",
+  "tags": [],
+  "description": "We were addressing the risk of power disruptions affecting tenant operations during the electrical service upgrade while creating an opportunity to improve building reliability, safety, and long-term electrical capacity with minimal impact on daily occupancy.",
+  "featured": false,
+  "answers": {
+    "winName": "Modernizing a Commercial Building Electrical Service Upgrade With Minimal Tenant Downtime",
+    "strategy": [
+      "We were addressing the risk of power disruptions affecting tenant operations during the electrical service upgrade while creating an opportunity to improve building reliability, safety, and long-term electrical capacity with minimal impact on daily occupancy.",
+      "This win aimed to reduce tenant downtime, avoid business interruption costs, improve project completion time, increase client satisfaction, and strengthen long-term service reliability, all of which aligned with the company’s strategic goals of operational excellence, customer trust, safety, and repeatable commercial project delivery.",
+      "The prioritized KPIs included tenant downtime hours, project completion schedule adherence, number of unplanned outages, safety incident rate, client satisfaction feedback, response time during shutdown windows, and percentage of critical building systems kept operational throughout the upgrade."
+    ],
+    "workPlan": [
+      "The most critical milestone was the phased main service shutdown and panel transfer, which required tight coordination between electricians, building management, tenants, safety personnel, and utility representatives to keep critical systems running and minimize disruption to occupied spaces.",
+      "We used phased shutdown scheduling, temporary power distribution, live panel/load tracking, lockout-tagout verification checklists, after-hours work windows, and daily tenant coordination updates to minimize downtime and keep critical building operations running during the upgrade.",
+      "The main go/no-go criterion was whether all critical building systems and tenant operations could remain supported by temporary power and verified shutdown sequencing before any service cutover or panel transfer was approved to proceed."
+    ],
+    "people": [
+      "The key stakeholder was the building operations manager, who coordinated tenant communication, approved shutdown windows, aligned access to occupied spaces, and ensured critical building systems remained operational throughout the electrical service upgrade.",
+      "The lead electrical foreman was the pivotal stakeholder because their technical expertise in live service transitions and willingness to make calculated real-time decisions allowed the team to safely execute phased cutovers while minimizing tenant downtime.",
+      "We used a layered communication strategy that included advance shutdown notices, tenant-specific impact schedules, daily email updates, after-hours coordination calls, and real-time status notifications so occupants could prepare for outages while minimizing disruption to normal business operations."
+    ],
+    "operations": [
+      "We used phased shutdown scheduling, temporary power distribution, live panel/load tracking, QR-based lockout-tagout verification, after-hours cutovers, and real-time tenant update logs, which complemented the existing safety procedures, project schedules, and building operations workflows by allowing faster coordination and safer service transitions with minimal downtime.",
+      "A critical partnership between the electrical contractor, building operations manager, utility provider, and tenant representatives ensured the upgrade was completed with minimal downtime, with each group coordinating shutdown approvals, access scheduling, temporary power support, and real-time communication during service transitions.",
+      "A critical partnership between the electrical contractor, building operations manager, utility provider, and tenant representatives ensured the upgrade was completed with minimal downtime, with each group coordinating shutdown approvals, access scheduling, temporary power support, and real-time communication during service transitions."
+    ],
+    "results": [
+      "The project was completed with zero unplanned tenant outages, no recordable safety incidents, over 95% schedule adherence, successful maintenance of critical building systems during all cutovers, and strong client satisfaction feedback regarding communication and minimal operational disruption.",
+      "The lead electrical foreman was the pivotal stakeholder because their expertise in live service transitions and willingness to make calculated real-time decisions allowed the team to safely coordinate phased cutovers, troubleshoot unexpected issues quickly, and keep tenant downtime to an absolute minimum.",
+      "We used tenant-specific outage schedules, QR-based notification boards, real-time SMS and email updates, after-hours coordination calls, and live shutdown status tracking, which complemented the existing building operations workflows and project schedules by improving communication clarity, reducing confusion, and allowing tenants to prepare for disruptions with minimal impact on daily operations."
+    ]
+  },
+  "questions": {
+    "strategy": [
+      "What problem or opportunity were you addressing for the tenants and building occupants during the electrical service upgrade?",
+      "What were the specific business or market metrics that this win aimed to achieve, and how were they aligned with the company's overall strategic objectives?",
+      "Which specific business metrics or KPIs were prioritized in aligning the electrical service upgrade with the company's strategic objectives?"
+    ],
+    "workPlan": [
+      "What was the most critical task or milestone that required coordination with multiple stakeholders to ensure minimal tenant downtime during the electrical service upgrade?",
+      "What unique tools or techniques were utilized to minimize tenant downtime during the electrical service upgrade?",
+      "What was the go/no-go criterion that kept the plan honest and ensured the electrical service upgrade met the minimal tenant downtime goals while minimizing potential disruptions to the building operations?"
+    ],
+    "people": [
+      "Who was the key stakeholder that enabled the successful execution of the electrical service upgrade while maintaining minimal tenant downtime, and what specific role did they play?",
+      "Who was the single stakeholder whose unique technical skills and willingness to take calculated risks were pivotal to navigating the complexities of the electrical service upgrade with minimal tenant downtime?",
+      "What specific communication strategy was employed to ensure that tenants were notified and prepared for potential downtime during the electrical service upgrade, while also minimizing their disruption to daily operations?"
+    ],
+    "operations": [
+      "What unique tools or techniques were utilized to minimize tenant downtime during the electrical service upgrade, and how did they complement the existing systems and processes?",
+      "What unique collaboration or partnership was essential in ensuring the electrical service upgrade was completed with minimal tenant downtime, and what specific roles did these stakeholders play?",
+      "What unique tools or techniques were utilized to ensure seamless communication with tenants and minimize disruptions to their daily operations during the electrical service upgrade, and how did these complement the existing systems and processes?"
+    ],
+    "results": [
+      "What measurable results showed this was a win?",
+      "What was the single stakeholder whose unique technical skills and willingness to take calculated risks were pivotal to navigating the complexities of the electrical service upgrade with minimal tenant downtime, and what specific role did they play?",
+      "What unique tools or techniques were utilized to ensure that tenants were notified and prepared for potential downtime during the electrical service upgrade, while also minimizing their disruption to daily operations, and how did these complement the existing systems and processes?"
+    ]
+  },
+  "answerTitles": {
+    "strategy": [
+      "Build reliability, safety, and long-term electrical capacity with minimal tenant downtime"
+    ],
+    "workPlan": [
+      "Coordinate phased shutdown and panel transfer with tight coordination across stakeholders to minimize disruption"
+    ],
+    "people": [
+      "Ensure coordination between stakeholders to keep critical systems operational and minimize downtime"
+    ],
+    "operations": [
+      "Use temporary power distribution and live panel/load tracking to ensure critical systems remain operational during service transitions"
+    ],
+    "results": [
+      "Maintain minimal tenant downtime, zero unplanned outages, and strong client satisfaction through effective communication and coordination"
+    ]
+  },
+  "playbook": {
+    "name": "Modernizing a Commercial Building Electrical Service Upgrade With Minimal Tenant Downtime",
+    "summaries": {
+      "strategy": [
+        "We were addressing the risk of power disruptions affecting tenant operations during the electrical service upgrade while creating an opportunity to improve building reliability, safety, and long-term electrical capacity with minimal impact on daily occupancy.",
+        "This win aimed to reduce tenant downtime, avoid business interruption costs, improve project completion time, increase client satisfaction, and strengthen long-term service reliability, all of which aligned with the company’s strategic goals of operational excellence, customer trust, safety, and repeatable commercial project delivery.",
+        "The prioritized KPIs included tenant downtime hours, project completion schedule adherence, number of unplanned outages, safety incident rate, client satisfaction feedback, response time during shutdown windows, and percentage of critical building systems kept operational throughout the upgrade."
+      ],
+      "workPlan": [
+        "The most critical milestone was the phased main service shutdown and panel transfer, which required tight coordination between electricians, building management, tenants, safety personnel, and utility representatives to keep critical systems running and minimize disruption to occupied spaces.",
+        "We used phased shutdown scheduling, temporary power distribution, live panel/load tracking, lockout-tagout verification checklists, after-hours work windows, and daily tenant coordination updates to minimize downtime and keep critical building operations running during the upgrade.",
+        "The main go/no-go criterion was whether all critical building systems and tenant operations could remain supported by temporary power and verified shutdown sequencing before any service cutover or panel transfer was approved to proceed."
+      ],
+      "people": [
+        "The key stakeholder was the building operations manager, who coordinated tenant communication, approved shutdown windows, aligned access to occupied spaces, and ensured critical building systems remained operational throughout the electrical service upgrade.",
+        "The lead electrical foreman was the pivotal stakeholder because their technical expertise in live service transitions and willingness to make calculated real-time decisions allowed the team to safely execute phased cutovers while minimizing tenant downtime.",
+        "We used a layered communication strategy that included advance shutdown notices, tenant-specific impact schedules, daily email updates, after-hours coordination calls, and real-time status notifications so occupants could prepare for outages while minimizing disruption to normal business operations."
+      ],
+      "operations": [
+        "We used phased shutdown scheduling, temporary power distribution, live panel/load tracking, QR-based lockout-tagout verification, after-hours cutovers, and real-time tenant update logs, which complemented the existing safety procedures, project schedules, and building operations workflows by allowing faster coordination and safer service transitions with minimal downtime.",
+        "A critical partnership between the electrical contractor, building operations manager, utility provider, and tenant representatives ensured the upgrade was completed with minimal downtime, with each group coordinating shutdown approvals, access scheduling, temporary power support, and real-time communication during service transitions.",
+        "A critical partnership between the electrical contractor, building operations manager, utility provider, and tenant representatives ensured the upgrade was completed with minimal downtime, with each group coordinating shutdown approvals, access scheduling, temporary power support, and real-time communication during service transitions."
+      ],
+      "results": [
+        "The project was completed with zero unplanned tenant outages, no recordable safety incidents, over 95% schedule adherence, successful maintenance of critical building systems during all cutovers, and strong client satisfaction feedback regarding communication and minimal operational disruption.",
+        "The lead electrical foreman was the pivotal stakeholder because their expertise in live service transitions and willingness to make calculated real-time decisions allowed the team to safely coordinate phased cutovers, troubleshoot unexpected issues quickly, and keep tenant downtime to an absolute minimum.",
+        "We used tenant-specific outage schedules, QR-based notification boards, real-time SMS and email updates, after-hours coordination calls, and live shutdown status tracking, which complemented the existing building operations workflows and project schedules by improving communication clarity, reducing confusion, and allowing tenants to prepare for disruptions with minimal impact on daily operations."
+      ]
+    },
+    "repeatableRule": "one sentence — the concrete lesson from THIS win worth repeating",
+    "suggestedNextWin": "one short sentence — a specific next win this leader should pursue",
+    "sdj": {
+      "save": "one sentence naming the specific practice, decision, or behavior from THIS win that should be kept and repeated — not a generic definition",
+      "delete": "one sentence naming the specific friction, misstep, or obstacle from THIS win that should be eliminated next time — not a generic definition",
+      "join": "one sentence naming a specific adjacent team, initiative, or opportunity that could benefit from connecting with THIS win's approach — not a generic definition"
+    }
+  },
+  "aiSummary": {
+    "sdj": {
+      "save": "The use of phased shutdown scheduling, temporary power distribution, and live panel/load tracking allowed for minimal tenant downtime and maintained critical building systems during the electrical service upgrade.",
+      "delete": "The implementation of a more rigorous safety protocol check for live panel transitions could have reduced the risk of unplanned outages.",
+      "join": "Joining with the utility provider to establish a pre-agreed upon shutdown window could further minimize tenant disruption and improve project completion time."
+    },
+    "generatedAt": "2026-05-09T22:25:59.610Z"
+  }
+}

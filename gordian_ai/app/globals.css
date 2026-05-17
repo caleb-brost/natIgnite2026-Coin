@@ -71,6 +71,30 @@ body {
 }
 .pulse-dot { animation: pulseDot 1.2s ease-in-out infinite; }
 
+/* Smooth open/close for native <details>. Modern browsers (Chrome 131+,
+   Firefox 137+, Safari 18.2+) animate height via ::details-content +
+   interpolate-size; older browsers fall back to instant toggle. */
+::details-content {
+  block-size: 0;
+  overflow-y: clip;
+  opacity: 0;
+  transition:
+    block-size .28s cubic-bezier(.2,.7,.2,1),
+    opacity .22s ease,
+    content-visibility .28s allow-discrete;
+  interpolate-size: allow-keywords;
+}
+[open]::details-content {
+  block-size: auto;
+  opacity: 1;
+}
+details > summary {
+  -webkit-tap-highlight-color: transparent;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
 .hero-glow {
   background:
     radial-gradient(60% 50% at 70% 20%, rgba(212,165,116,0.20) 0%, rgba(212,165,116,0) 60%),

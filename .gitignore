@@ -1,0 +1,11 @@
+# Local model weights — never commit
+.local-models/
+
+# Local Python venv for the inference server
+.venv/
+local-llm/.venv/
+local-llm/__pycache__/
+
+# Misc
+.DS_Store
+.claude/

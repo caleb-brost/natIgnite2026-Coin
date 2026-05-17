@@ -1,0 +1,29 @@
+{
+  "id": "WIN-004",
+  "name": "Finished bridge construction project",
+  "createdAt": "2026-05-12T04:59:19.434Z",
+  "updatedAt": "2026-05-12T05:00:19.150Z",
+  "author": "Lin",
+  "tags": [],
+  "description": "",
+  "featured": false,
+  "answers": {
+    "winName": "Finished bridge construction project",
+    "strategy": [
+      "We were able to reach many large citys and towns that were interested in future potential projects."
+    ],
+    "workPlan": [],
+    "people": [],
+    "operations": [],
+    "results": []
+  },
+  "questions": {
+    "strategy": [
+      "What new market opportunity did this win create and how did it align with the company's strategic goals?"
+    ],
+    "workPlan": [],
+    "people": [],
+    "operations": [],
+    "results": []
+  }
+}
